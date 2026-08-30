@@ -41,6 +41,51 @@
   .card-shadow { box-shadow: 0 1px 2px rgba(15,20,25,0.04), 0 1px 3px rgba(15,20,25,0.06); }
   .card-shadow-lg { box-shadow: 0 4px 12px rgba(15,20,25,0.08), 0 2px 4px rgba(15,20,25,0.04); }
   .kanban-column { min-width: 300px; max-width: 300px; }
+
+  /* Colunas com identidade visual própria por fase */
+  .coluna-header {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--cor-fase);
+    border-radius: 10px 10px 0 0;
+    box-shadow: 0 1px 2px rgba(15,20,25,0.04);
+  }
+  .coluna-contador {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 22px; height: 20px; padding: 0 7px;
+    border-radius: 999px; font-size: 11px; font-weight: 700;
+  }
+  .coluna-corpo {
+    background: rgba(15, 20, 25, 0.035);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    min-height: 120px;
+    box-shadow: inset 0 1px 3px rgba(15,20,25,0.05);
+  }
+  .coluna-corpo.drag-over {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+  .coluna-vazia {
+    padding: 22px 10px; text-align: center;
+    font-size: 12px; color: var(--text-3);
+    border: 1px dashed var(--border); border-radius: 8px;
+    background: rgba(255,255,255,0.5);
+  }
+  .card-travado {
+    outline: 2px solid var(--warn);
+    outline-offset: -2px;
+  }
+  .selo-editando {
+    display: inline-flex; align-items: center; gap: 3px;
+    padding: 2px 6px; border-radius: 999px;
+    font-size: 10px; font-weight: 600;
+    background: var(--warn-soft); color: #92400E;
+  }
   .kanban-scroll { scrollbar-width: thin; scrollbar-color: #CFD3D9 transparent; }
   .kanban-scroll::-webkit-scrollbar { height: 10px; width: 10px; }
   .kanban-scroll::-webkit-scrollbar-thumb { background: #CFD3D9; border-radius: 5px; }
@@ -354,6 +399,7 @@
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
     </div>
+    <div id="avisoLock" class="hidden"></div>
     <div id="modalBody" class="p-6"></div>
     <div class="px-6 py-4 border-t flex items-center justify-between" style="border-color: var(--border);">
       <button id="btnDelete" onclick="deleteCard()" class="btn btn-ghost text-red-600 hidden">
@@ -369,6 +415,10 @@
           <i data-lucide="send" class="w-4 h-4"></i>
           Enviar
         </button>
+        <button onclick="abrirHistoricoCard()" class="btn btn-ghost" title="Ver quem alterou o quê">
+          <i data-lucide="history" class="w-4 h-4"></i>
+          Histórico
+        </button>
       </div>
       <div class="flex-1"></div>
       <div class="flex items-center gap-2">
@@ -376,6 +426,22 @@
         <button id="btnSave" onclick="saveCard()" class="btn btn-primary">Salvar</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- =================== HISTÓRICO =================== -->
+<div id="histModal" class="hidden fixed inset-0 z-50 modal-backdrop items-center justify-center p-4">
+  <div class="bg-white rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col card-shadow-lg">
+    <div class="flex items-center justify-between px-5 py-4 border-b" style="border-color: var(--border);">
+      <div class="flex items-center gap-2">
+        <i data-lucide="history" class="w-5 h-5" style="color: var(--accent);"></i>
+        <h3 id="histTitulo" class="font-bold">Histórico</h3>
+      </div>
+      <button onclick="fecharHistorico()" class="btn-ghost p-1.5 rounded">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <div id="histBody" class="flex-1 overflow-y-auto kanban-scroll"></div>
   </div>
 </div>
 
@@ -831,11 +897,19 @@ function emailAutorizado(email) {
 }
 
 const STORAGE_KEY = 'dsm_gestao_v3_cache';
-const INTERVALO_AUTOSAVE = 60000; // 60 segundos
+const FILA_KEY    = 'dsm_gestao_fila';
+const INTERVALO_SYNC = 5000;    // busca novidades da equipe a cada 5s
+const INTERVALO_FILA = 1500;    // tenta esvaziar a fila a cada 1,5s
+const MAX_TENTATIVAS = 6;       // depois disso, para e avisa
 
-let sincronizando = false;
-let alteracoesPendentes = false;
-let timerAutosave = null;
+let processandoFila = false;
+let buscandoNovidades = false;
+let timerSync = null;
+let timerFila = null;
+let ultimaSync = null;          // timestamp do servidor da última leitura
+let filaEnvio = [];             // operações pendentes (persistidas)
+let locksRemotos = {};          // { 'tipo:id': {nome, email, expiraEm} }
+let ultimoErroSync = null;
 
 // ====== COMUNICAÇÃO COM O GOOGLE ======
 
@@ -854,78 +928,234 @@ async function pegarToken() {
   }
 }
 
-async function apiGet(acao) {
-  const url = API_URL + '?acao=' + encodeURIComponent(acao) + '&t=' + Date.now();
-  const resp = await fetch(url);
-  if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  return await resp.json();
-}
-
 async function apiPost(corpo) {
-  // O backend confere este token e só aceita e-mails @dsm-firmenich.com
   corpo.idToken = await pegarToken();
+  corpo.nomeUsuario = state.currentUser?.name || '';
   const resp = await fetch(API_URL, {
     method: 'POST',
-    // text/plain evita o "preflight" do navegador, que o Apps Script não responde
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify(corpo),
   });
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const r = await resp.json();
-  if (r && r.erro && /autoriza|credencial|domínio|dominio/i.test(r.erro)) {
-    showToast('Acesso negado pelo servidor — faça login de novo');
+  if (r && r.naoAutorizado) {
+    showToast('Sessão expirada — entre de novo');
   }
   return r;
 }
 
+// ====== INDICADOR DE STATUS ======
+
 function marcarStatusSync(estado, texto) {
   const el = document.getElementById('syncStatus');
   if (!el) return;
+  const n = filaEnvio.length;
   const cores = {
-    ok:       { bg: 'rgba(255,255,255,0.15)', txt: '✓ ' + (texto || 'Salvo no Google') },
-    salvando: { bg: 'rgba(255,255,255,0.25)', txt: '⟳ ' + (texto || 'Salvando...') },
-    erro:     { bg: 'rgba(220,38,38,0.85)',   txt: '⚠ ' + (texto || 'Erro ao salvar') },
-    offline:  { bg: 'rgba(217,119,6,0.85)',   txt: '⚠ ' + (texto || 'Somente neste PC') },
+    ok:       { bg: 'rgba(255,255,255,0.15)', txt: '✓ ' + (texto || 'Salvo') },
+    salvando: { bg: 'rgba(255,255,255,0.28)', txt: '⟳ ' + (texto || (n ? 'Enviando (' + n + ')' : 'Enviando')) },
+    erro:     { bg: 'rgba(220,38,38,0.9)',    txt: '⚠ ' + (texto || 'Erro') },
+    offline:  { bg: 'rgba(217,119,6,0.9)',    txt: '⚠ ' + (texto || (n ? 'Sem conexão (' + n + ' na fila)' : 'Sem conexão')) },
+    local:    { bg: 'rgba(217,119,6,0.9)',    txt: '⚠ Modo local' },
   };
   const c = cores[estado] || cores.ok;
   el.style.background = c.bg;
   el.textContent = c.txt;
 }
 
-// ====== CARREGAR ======
+// ====== FILA DE ENVIO (persistente) ======
 
-async function carregarDados() {
-  // 1) Sem API configurada: modo local (cache do navegador)
-  if (!apiConfigurada()) {
-    marcarStatusSync('offline', 'Modo local — sem sincronização');
-    return carregarCacheLocal();
+function carregarFila() {
+  try { filaEnvio = JSON.parse(localStorage.getItem(FILA_KEY) || '[]'); }
+  catch (e) { filaEnvio = []; }
+}
+
+function gravarFila() {
+  try { localStorage.setItem(FILA_KEY, JSON.stringify(filaEnvio)); } catch (e) {}
+}
+
+function enfileirar(operacao) {
+  if (!apiConfigurada()) return;
+
+  // Uma operação por card: a mais nova substitui a anterior que ainda não saiu
+  if (operacao.acao === 'salvarCard') {
+    const chave = operacao.tipo + ':' + operacao.card.id;
+    filaEnvio = filaEnvio.filter(o => !(o.acao === 'salvarCard' && (o.tipo + ':' + o.card.id) === chave));
+  }
+  if (operacao.acao === 'excluirCard') {
+    const chave = operacao.tipo + ':' + operacao.id;
+    filaEnvio = filaEnvio.filter(o => {
+      const c = o.acao === 'salvarCard' ? (o.tipo + ':' + o.card.id)
+              : o.acao === 'excluirCard' ? (o.tipo + ':' + o.id) : null;
+      return c !== chave;
+    });
   }
 
-  // 2) Busca no Google
+  operacao._id = 'op_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+  operacao._tentativas = 0;
+  operacao._proximaEm = 0;
+  filaEnvio.push(operacao);
+  gravarFila();
+  marcarStatusSync('salvando');
+  processarFila(); // tenta na hora, sem esperar o timer
+}
+
+async function processarFila() {
+  if (processandoFila || !filaEnvio.length || !apiConfigurada()) return;
+  if (!auth?.currentUser) return;
+
+  processandoFila = true;
+  try {
+    while (filaEnvio.length) {
+      const op = filaEnvio[0];
+      if (op._proximaEm && Date.now() < op._proximaEm) break; // aguardando backoff
+
+      let r;
+      try {
+        r = await apiPost(montarRequisicao(op));
+      } catch (e) {
+        // Falha de rede: espera mais um pouco e tenta de novo
+        op._tentativas++;
+        op._proximaEm = Date.now() + Math.min(30000, 1000 * Math.pow(2, op._tentativas));
+        gravarFila();
+        marcarStatusSync('offline');
+        break;
+      }
+
+      if (r && r.ok) {
+        aplicarRespostaOk(op, r);
+        filaEnvio.shift();
+        gravarFila();
+        continue;
+      }
+
+      if (r && r.conflito) {
+        filaEnvio.shift();
+        gravarFila();
+        tratarConflito(op, r);
+        continue;
+      }
+
+      // Erro do servidor: tenta de novo com espera crescente
+      op._tentativas++;
+      if (op._tentativas >= MAX_TENTATIVAS) {
+        console.warn('Operação descartada após várias tentativas:', op, r);
+        showToast('Não consegui salvar uma alteração. Verifique a conexão e tente de novo.');
+        filaEnvio.shift();
+        gravarFila();
+        continue;
+      }
+      op._proximaEm = Date.now() + Math.min(30000, 1000 * Math.pow(2, op._tentativas));
+      gravarFila();
+      marcarStatusSync('erro', 'Tentando de novo...');
+      break;
+    }
+  } finally {
+    processandoFila = false;
+    if (!filaEnvio.length) marcarStatusSync('ok');
+    else marcarStatusSync('salvando');
+  }
+}
+
+function montarRequisicao(op) {
+  if (op.acao === 'salvarCard') {
+    return {
+      acao: 'salvarCard', tipo: op.tipo, card: op.card,
+      versaoBase: op.versaoBase,
+      contadores: {
+        _seqDesvio: state.data._seqDesvio || 0,
+        _seqNC: state.data._seqNC || 0,
+        _seqSQM: state.data._seqSQM || 0,
+        _config: state.data._config || {},
+      },
+    };
+  }
+  if (op.acao === 'excluirCard') return { acao: 'excluirCard', tipo: op.tipo, id: op.id };
+  return { ...op };
+}
+
+function aplicarRespostaOk(op, r) {
+  if (op.acao === 'salvarCard' && r.versao) {
+    const lista = getItemsByType(op.tipo === 'desvios' ? 'desvio' : op.tipo === 'acoes' ? 'acao' : op.tipo);
+    const atual = (lista || []).find(c => c.id === op.card.id);
+    if (atual) {
+      atual._versao = r.versao;
+      atual._atualizadoEm = r.atualizadoEm;
+      atual._atualizadoPor = emailUsuario();
+      salvarCacheLocal(state.data);
+    }
+  }
+}
+
+function tratarConflito(op, r) {
+  const numero = op.card?.numero || op.card?.id || '';
+  const quem = (r.alteradoPor || '').split('@')[0];
+  const manter = confirm(
+    'Conflito no card ' + numero + '\n\n' +
+    (quem ? quem + ' salvou uma versão mais nova enquanto você editava.' : 'Outra pessoa salvou uma versão mais nova.') + '\n\n' +
+    'OK = manter a MINHA versão (sobrescreve a dela)\n' +
+    'Cancelar = descartar a minha e ficar com a versão dela'
+  );
+
+  if (manter) {
+    // Reenvia com a versão do servidor, forçando a gravação
+    const op2 = { ...op, versaoBase: r.versaoServidor };
+    op2._id = 'op_' + Date.now();
+    op2._tentativas = 0; op2._proximaEm = 0;
+    filaEnvio.unshift(op2);
+    gravarFila();
+    processarFila();
+  } else if (r.cardServidor) {
+    const chave = { desvios: 'desvios', acoes: 'acoes', nc: 'nc', sqm: 'sqm', lixeira: 'lixeira' }[op.tipo];
+    if (chave && state.data[chave]) {
+      const i = state.data[chave].findIndex(c => c.id === op.card.id);
+      const doServidor = { ...r.cardServidor, _versao: r.versaoServidor, _atualizadoPor: r.alteradoPor };
+      if (i > -1) state.data[chave][i] = doServidor;
+      salvarCacheLocal(state.data);
+      render();
+      lucide.createIcons();
+    }
+    showToast('Mantida a versão de ' + (quem || 'outra pessoa'));
+  }
+}
+
+// ====== CARREGAR ======
+
+const CHAVES_TIPO = { desvio: 'desvios', acao: 'acoes', nc: 'nc', sqm: 'sqm', lixeira: 'lixeira' };
+
+async function carregarDados() {
+  if (!apiConfigurada()) {
+    marcarStatusSync('local');
+    return carregarCacheLocal();
+  }
   try {
     marcarStatusSync('salvando', 'Carregando...');
     const r = await apiPost({ acao: 'carregar' });
     if (!r.ok) throw new Error(r.erro || 'Falha ao carregar');
 
+    ultimaSync = r.agora;
+    guardarLocks(r.locks);
     const dados = r.dados;
     const vazio = !dados.desvios?.length && !dados.acoes?.length && !dados.nc?.length && !dados.sqm?.length;
 
     if (vazio) {
-      // Primeira vez: sobe os dados de exemplo pro Google
       const inicial = JSON.parse(JSON.stringify(seedData));
-      await apiPost({ acao: 'salvarTudo', dados: inicial, usuario: emailUsuario() });
-      marcarStatusSync('ok', 'Sincronizado');
+      inicial.lixeira = [];
+      const rs = await apiPost({ acao: 'semear', dados: inicial });
+      if (rs.agora) ultimaSync = rs.agora;
+      marcarStatusSync('ok');
+      salvarCacheLocal(inicial);
       return inicial;
     }
 
+    dados.lixeira = dados.lixeira || [];
     aplicarConfigSalva(dados);
     salvarCacheLocal(dados);
-    marcarStatusSync('ok', 'Sincronizado');
+    marcarStatusSync('ok');
     return dados;
 
   } catch (e) {
     console.warn('Erro ao carregar do Google:', e);
-    marcarStatusSync('erro', 'Sem conexão — usando cópia local');
+    marcarStatusSync('offline', 'Sem conexão — usando cópia local');
     return carregarCacheLocal();
   }
 }
@@ -943,95 +1173,176 @@ function carregarCacheLocal() {
     const bruto = localStorage.getItem(STORAGE_KEY);
     if (bruto) {
       const d = JSON.parse(bruto);
+      d.lixeira = d.lixeira || [];
       aplicarConfigSalva(d);
       return d;
     }
   } catch (e) { console.warn(e); }
-  return JSON.parse(JSON.stringify(seedData));
+  const inicial = JSON.parse(JSON.stringify(seedData));
+  inicial.lixeira = [];
+  return inicial;
 }
 
 function salvarCacheLocal(dados) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dados)); }
-  catch (e) { /* cota do navegador cheia — ok, o Google é a fonte oficial */ }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(dados)); } catch (e) {}
+}
+
+// ====== SINCRONIZAÇÃO AUTOMÁTICA (busca só o que mudou) ======
+
+async function buscarNovidades() {
+  if (!apiConfigurada() || buscandoNovidades || !auth?.currentUser) return;
+  if (filaEnvio.length) return;              // primeiro envia o meu, depois busco o dos outros
+  if (state.editingCard && state.editingCard.id) return; // não mexe embaixo de quem está editando
+
+  buscandoNovidades = true;
+  try {
+    const r = await apiPost({ acao: 'carregar', desde: ultimaSync });
+    if (!r.ok) return;
+    ultimaSync = r.agora;
+    guardarLocks(r.locks);
+    ultimoErroSync = null;
+
+    let mexeu = 0;
+    const nomes = new Set();
+
+    Object.keys(CHAVES_TIPO).forEach(tipoCurto => {
+      const chave = CHAVES_TIPO[tipoCurto];
+      (r.dados[chave] || []).forEach(cardNovo => {
+        state.data[chave] = state.data[chave] || [];
+        const i = state.data[chave].findIndex(c => c.id === cardNovo.id);
+        if (i > -1) {
+          if ((state.data[chave][i]._versao || 0) === (cardNovo._versao || 0)) return;
+          state.data[chave][i] = cardNovo;
+        } else {
+          state.data[chave].push(cardNovo);
+        }
+        mexeu++;
+        if (cardNovo._atualizadoPor && cardNovo._atualizadoPor !== emailUsuario()) {
+          nomes.add(cardNovo._atualizadoPor.split('@')[0]);
+        }
+      });
+    });
+
+    (r.excluidos || []).forEach(ex => {
+      const chave = ex.tipo;
+      if (!state.data[chave]) return;
+      const antes = state.data[chave].length;
+      state.data[chave] = state.data[chave].filter(c => c.id !== ex.id);
+      if (state.data[chave].length !== antes) mexeu++;
+    });
+
+    if (mexeu) {
+      salvarCacheLocal(state.data);
+      if (!document.getElementById('cardModal').classList.contains('hidden')) return;
+      render();
+      lucide.createIcons();
+      if (nomes.size) {
+        const lista = Array.from(nomes).join(', ');
+        showToast(`${lista} atualizou ${mexeu === 1 ? 'um card' : mexeu + ' cards'}`);
+      }
+    }
+    if (!filaEnvio.length) marcarStatusSync('ok');
+
+  } catch (e) {
+    ultimoErroSync = e;
+    if (!filaEnvio.length) marcarStatusSync('offline');
+  } finally {
+    buscandoNovidades = false;
+  }
+}
+
+function guardarLocks(lista) {
+  locksRemotos = {};
+  (lista || []).forEach(l => { locksRemotos[l.chave] = l; });
+}
+
+function lockDeOutro(tipo, id) {
+  const l = locksRemotos[tipo + ':' + id];
+  if (!l) return null;
+  if (new Date(l.expiraEm).getTime() < Date.now()) return null;
+  if (l.email === emailUsuario()) return null;
+  return l;
 }
 
 // ====== SALVAR ======
 
-// Chamada em todo lugar que já existia. Salva local na hora e agenda o envio.
+// Mantida por compatibilidade: grava o cache local e marca o status
 function saveData() {
   salvarCacheLocal(state.data);
-  alteracoesPendentes = true;
-  if (apiConfigurada()) marcarStatusSync('salvando', 'Alterações pendentes');
 }
 
-// Envia um card específico (mais rápido, evita conflito entre pessoas)
-async function enviarCard(tipo, card) {
+// Envia UM card (nunca a base inteira)
+function enviarCard(tipoCurto, card) {
+  if (!apiConfigurada()) { salvarCacheLocal(state.data); return; }
+  const tipo = CHAVES_TIPO[tipoCurto] || tipoCurto;
+  enfileirar({
+    acao: 'salvarCard', tipo,
+    card: JSON.parse(JSON.stringify(card)),
+    versaoBase: card._versao != null ? card._versao : null,
+  });
+}
+
+function enviarExclusao(tipoCurto, id) {
   if (!apiConfigurada()) return;
-  try {
-    sincronizando = true;
-    marcarStatusSync('salvando');
-    const r = await apiPost({
-      acao: 'salvarCard', tipo, card,
-      usuario: emailUsuario(),
-      contadores: {
-        _seqDesvio: state.data._seqDesvio || 0,
-        _seqNC: state.data._seqNC || 0,
-        _seqSQM: state.data._seqSQM || 0,
-        _config: state.data._config || {},
-      },
-    });
-    if (!r.ok) throw new Error(r.erro);
-    marcarStatusSync('ok');
-  } catch (e) {
-    console.warn('Erro ao enviar card:', e);
-    marcarStatusSync('erro', 'Não salvou no Google');
-  } finally {
-    sincronizando = false;
-  }
+  enfileirar({ acao: 'excluirCard', tipo: CHAVES_TIPO[tipoCurto] || tipoCurto, id });
 }
 
-// Envia a base inteira (usado pelo autosave e pelo botão manual)
+// Botão "enviar agora" da barra superior
 async function sincronizarAgora(silencioso) {
-  if (!apiConfigurada() || sincronizando) return;
-  try {
-    sincronizando = true;
-    marcarStatusSync('salvando');
-    const r = await apiPost({ acao: 'salvarTudo', dados: state.data, usuario: emailUsuario() });
-    if (!r.ok) throw new Error(r.erro);
-    alteracoesPendentes = false;
-    marcarStatusSync('ok');
-    if (!silencioso) showToast('Sincronizado com o Google');
-  } catch (e) {
-    console.warn('Erro na sincronização:', e);
-    marcarStatusSync('erro', 'Falha ao sincronizar');
-    if (!silencioso) showToast('Não consegui sincronizar — verifique a conexão');
-  } finally {
-    sincronizando = false;
+  if (!apiConfigurada()) { showToast('Sincronização não configurada'); return; }
+  filaEnvio.forEach(op => { op._proximaEm = 0; op._tentativas = 0; });
+  gravarFila();
+  await processarFila();
+  await buscarNovidades();
+  if (!silencioso) {
+    showToast(filaEnvio.length ? `${filaEnvio.length} alteração(ões) ainda na fila` : 'Tudo sincronizado');
   }
 }
 
-// Busca do Google o que os colegas mudaram
+// Botão "buscar alterações da equipe"
 async function recarregarDoGoogle() {
   if (!apiConfigurada()) { showToast('Sincronização não configurada'); return; }
-  if (alteracoesPendentes && !confirm('Você tem alterações não enviadas. Recarregar vai descartá-las. Continuar?')) return;
+  await processarFila();
+  ultimaSync = null;
   const dados = await carregarDados();
   state.data = dados;
   render();
   lucide.createIcons();
-  showToast('Atualizado com as mudanças da equipe');
+  showToast('Atualizado');
 }
 
-function iniciarAutosave() {
-  if (timerAutosave) clearInterval(timerAutosave);
-  timerAutosave = setInterval(() => {
-    if (alteracoesPendentes && !sincronizando) sincronizarAgora(true);
-  }, INTERVALO_AUTOSAVE);
+function iniciarSincronizacao() {
+  carregarFila();
+  if (timerSync) clearInterval(timerSync);
+  if (timerFila) clearInterval(timerFila);
 
-  // Avisa se tentar fechar com coisa pendente
-  window.addEventListener('beforeunload', (e) => {
-    if (alteracoesPendentes) { e.preventDefault(); e.returnValue = ''; }
+  timerFila = setInterval(processarFila, INTERVALO_FILA);
+  timerSync = setInterval(buscarNovidades, INTERVALO_SYNC);
+
+  // Voltou a internet: tenta esvaziar a fila na hora
+  window.addEventListener('online', () => { marcarStatusSync('salvando'); processarFila(); });
+  window.addEventListener('offline', () => marcarStatusSync('offline'));
+
+  // Aba voltou ao foco: busca novidades imediatamente
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) { processarFila(); buscarNovidades(); }
+  });
+
+  // Fechando com algo pendente: tenta um último envio, sem perguntar nada
+  window.addEventListener('pagehide', () => {
+    if (!filaEnvio.length || !navigator.sendBeacon) return;
+    try {
+      const op = filaEnvio[0];
+      const corpo = montarRequisicao(op);
+      corpo.idToken = tokenCache || '';
+      navigator.sendBeacon(API_URL, new Blob([JSON.stringify(corpo)], { type: 'text/plain' }));
+    } catch (e) {}
   });
 }
+
+// Token guardado para o envio de última hora (sendBeacon não espera promessa)
+let tokenCache = '';
+setInterval(async () => { tokenCache = await pegarToken(); }, 30000);
 
 function emailUsuario() {
   return state.currentUser?.email || 'desconhecido';
@@ -1205,17 +1516,19 @@ async function entrarNoApp(usuario) {
   atualizarIdentidadeUsuario();
   render();
   lucide.createIcons();
-  iniciarAutosave();
+  iniciarSincronizacao();
   abrirCardDaURL();
   showToast('Bem-vindo, ' + nome.split(' ')[0]);
 }
 
 async function doLogout() {
-  if (alteracoesPendentes && apiConfigurada()) {
-    if (confirm('Você tem alterações não enviadas. Salvar antes de sair?')) await sincronizarAgora(true);
+  if (filaEnvio.length && apiConfigurada()) {
+    marcarStatusSync('salvando', 'Salvando antes de sair...');
+    await processarFila();
   }
-  if (timerAutosave) clearInterval(timerAutosave);
-  alteracoesPendentes = false;
+  if (timerSync) clearInterval(timerSync);
+  if (timerFila) clearInterval(timerFila);
+  liberarLockAtual();
   state.currentUser = null;
   try { await auth.signOut(); } catch (e) {}
   document.getElementById('loginScreen').classList.remove('hidden');
@@ -1733,18 +2046,19 @@ function renderKanban(type) {
             const faseItems = filtered.filter(i => i.fase === fase.id);
             return `
               <div class="kanban-column flex-shrink-0 flex flex-col">
-                <div class="flex items-center justify-between mb-2 px-1">
-                  <div class="flex items-center gap-2">
-                    <span class="status-dot" style="background: ${fase.color};"></span>
-                    <h3 class="font-semibold text-sm">${fase.label}</h3>
-                    <span class="text-xs mono" style="color: var(--text-3);">${faseItems.length}</span>
+                <div class="coluna-header" style="--cor-fase: ${fase.color};">
+                  <div class="flex items-center gap-2 min-w-0">
+                    <h3 class="font-semibold text-sm truncate" style="color: ${fase.color};">${fase.label}</h3>
+                    <span class="coluna-contador" style="background: ${fase.softBg}; color: ${fase.color};">${faseItems.length}</span>
                   </div>
-                  <button onclick="openNewCardModalInPhase('${fase.id}')" class="btn-ghost p-1 rounded" title="Adicionar aqui">
+                  <button onclick="openNewCardModalInPhase('${fase.id}')" class="btn-ghost p-1 rounded flex-shrink-0" title="Adicionar aqui">
                     <i data-lucide="plus" class="w-3.5 h-3.5"></i>
                   </button>
                 </div>
-                <div class="drop-zone flex-1 rounded-lg p-2 space-y-2 overflow-y-auto kanban-scroll" data-fase="${fase.id}" data-type="${type}">
-                  ${faseItems.map(item => renderCardItem(item, type)).join('')}
+                <div class="drop-zone coluna-corpo flex-1 p-2 space-y-2 overflow-y-auto kanban-scroll" data-fase="${fase.id}" data-type="${type}">
+                  ${faseItems.length
+                    ? faseItems.map(item => renderCardItem(item, type)).join('')
+                    : '<div class="coluna-vazia">Nenhum card aqui</div>'}
                 </div>
               </div>
             `;
@@ -1753,6 +2067,17 @@ function renderKanban(type) {
       </div>
     </div>
   `;
+}
+
+function seloEditando(tipoCurto, id) {
+  const tipo = CHAVES_TIPO[tipoCurto] || tipoCurto;
+  const l = lockDeOutro(tipo, id);
+  if (!l) return { classe: '', selo: '' };
+  const nome = (l.nome || l.email || '').split('@')[0].split(' ')[0];
+  return {
+    classe: ' card-travado',
+    selo: `<span class="selo-editando" title="${escapeHtml(l.nome || l.email || '')} está editando"><i data-lucide="lock" class="w-2.5 h-2.5"></i>${escapeHtml(nome)}</span>`
+  };
 }
 
 function renderCardItem(item, type) {
@@ -1764,15 +2089,17 @@ function renderCardItem(item, type) {
 }
 
 function renderCardDesvio(item) {
+  const trava = seloEditando('desvio', item.id);
   const crit = CRITICIDADES.find(c => c.id === item.criticidade) || CRITICIDADES[2];
   const reg = item.registro || {};
   const aq = item.avalQualidade || {};
   const unidadeCurta = (reg.unidade || '').split(' - ')[1] || reg.unidade || '';
   return `
-    <div class="card-item relative bg-white rounded-md p-3 border card-shadow" style="border-color: var(--border);" 
+    <div class="card-item relative bg-white rounded-md p-3 border card-shadow${trava.classe}" style="border-color: var(--border);" 
          draggable="true" data-id="${item.id}" onclick="openCard('${item.id}', 'desvio')">
       <div class="priority-border" style="background: ${crit.color};"></div>
       <div class="flex items-center gap-1 mb-1.5 flex-wrap">
+        ${trava.selo}
         <span class="tag" style="background: ${crit.bg}; color: ${crit.color};">${crit.label.split(' - ')[0]}</span>
         ${unidadeCurta ? `<span class="tag" style="background: var(--surface-2); color: var(--text-2);">${unidadeCurta}</span>` : ''}
         ${item.diasAtraso > 0 ? `<span class="tag" style="background: var(--danger-soft); color: var(--danger);">${item.diasAtraso}d atraso</span>` : ''}
@@ -1798,6 +2125,7 @@ function renderCardDesvio(item) {
 }
 
 function renderCardAcao(item) {
+  const trava = seloEditando('acao', item.id);
   const prioColors = {
     critica: { bg: 'var(--danger-soft)', color: 'var(--danger)' },
     alta: { bg: '#FED7AA', color: '#EA580C' },
@@ -1807,10 +2135,11 @@ function renderCardAcao(item) {
   const p = prioColors[item.prioridade] || prioColors.media;
   const dias = daysUntil(item.dataLimite);
   return `
-    <div class="card-item relative bg-white rounded-md p-3 border card-shadow" style="border-color: var(--border);" 
+    <div class="card-item relative bg-white rounded-md p-3 border card-shadow${trava.classe}" style="border-color: var(--border);" 
          draggable="true" data-id="${item.id}" onclick="openCard('${item.id}', 'acao')">
       <div class="priority-border" style="background: ${p.color};"></div>
       <div class="flex items-center gap-1 mb-1.5 flex-wrap">
+        ${trava.selo}
         <span class="tag" style="background: ${p.bg}; color: ${p.color};">${item.prioridade[0].toUpperCase() + item.prioridade.slice(1)}</span>
         <span class="tag" style="background: var(--surface-2); color: var(--text-2);">${item.setor}</span>
         ${dias < 0 && item.fase !== 'concluido' ? `<span class="tag" style="background: var(--danger-soft); color: var(--danger);">Venceu</span>` : ''}
@@ -1841,6 +2170,7 @@ function renderCardAcao(item) {
 }
 
 function renderCardNC(item) {
+  const trava = seloEditando('nc', item.id);
   const reg = item.registro || {};
   const aq = item.avaliacaoQualidade || {};
   const crit = CRITICIDADES.find(c => c.id === item.criticidade) || CRITICIDADES[2];
@@ -1848,10 +2178,11 @@ function renderCardNC(item) {
   const diasAguardando = item.fase === 'aguardandoFornecedor' && item.envioFornecedor?.dataEnvio
     ? Math.floor((new Date() - new Date(item.envioFornecedor.dataEnvio)) / (1000*60*60*24)) : null;
   return `
-    <div class="card-item relative bg-white rounded-md p-3 border card-shadow" style="border-color: var(--border);"
+    <div class="card-item relative bg-white rounded-md p-3 border card-shadow${trava.classe}" style="border-color: var(--border);"
          draggable="true" data-id="${item.id}" onclick="openCard('${item.id}', 'nc')">
       <div class="priority-border" style="background: ${crit.color};"></div>
       <div class="flex items-center gap-1 mb-1.5 flex-wrap">
+        ${trava.selo}
         <span class="tag" style="background: var(--purple-soft); color: var(--purple);">NC</span>
         ${unidadeCurta ? `<span class="tag" style="background: var(--surface-2); color: var(--text-2);">${unidadeCurta}</span>` : ''}
         ${reg.tipoNC ? `<span class="tag" style="background: #FEF3C7; color: #B45309;">${reg.tipoNC}</span>` : ''}
@@ -1874,16 +2205,18 @@ function renderCardNC(item) {
 }
 
 function renderCardSQM(item) {
+  const trava = seloEditando('sqm', item.id);
   const c = item.compras || {};
   const aprovacoes = item.aprovacoes || {};
   const statusMap = { aprovado: '✅', reprovado: '❌', pendente: '⏳' };
   const anyReprovado = ['qualidade','she','operacoes'].some(g => aprovacoes[g]?.status === 'reprovado');
   const allAprovado = ['qualidade','she','operacoes'].every(g => aprovacoes[g]?.status === 'aprovado');
   return `
-    <div class="card-item relative bg-white rounded-md p-3 border card-shadow" style="border-color: var(--border);"
+    <div class="card-item relative bg-white rounded-md p-3 border card-shadow${trava.classe}" style="border-color: var(--border);"
          draggable="true" data-id="${item.id}" onclick="openCard('${item.id}', 'sqm')">
       <div class="priority-border" style="background: ${anyReprovado ? 'var(--danger)' : allAprovado ? 'var(--ok)' : 'var(--info)'};"></div>
       <div class="flex items-center gap-1 mb-1.5 flex-wrap">
+        ${trava.selo}
         <span class="tag" style="background: #CCFBF1; color: var(--teal);">SQM</span>
         ${item.tipo ? `<span class="tag" style="background: var(--surface-2); color: var(--text-2);">${item.tipo}</span>` : ''}
         ${anyReprovado ? `<span class="tag" style="background: var(--danger-soft); color: var(--danger);">REPROVADO</span>` 
@@ -1949,6 +2282,17 @@ function moveCard(id, newFase, type) {
   const arr = getItemsByType(type);
   const card = arr.find(c => c.id === id);
   if (!card) return;
+
+  // Se outra pessoa está com o card aberto, não deixa arrastar
+  const travado = lockDeOutro(CHAVES_TIPO[type] || type, id);
+  if (travado) {
+    const nome = (travado.nome || travado.email || '').split('@')[0];
+    showToast(`${nome} está editando este card — aguarde`);
+    render();
+    lucide.createIcons();
+    return;
+  }
+
   const oldFase = card.fase;
   if (oldFase === newFase) return;
   card.fase = newFase;
@@ -2027,7 +2371,97 @@ function openCard(id, type) {
   state.editingType = type;
   const arr = getItemsByType(type);
   state.editingCard = arr.find(c => c.id === id);
+  if (!state.editingCard) { showToast('Card não encontrado'); return; }
   renderModal();
+  adquirirLock(type, id);
+}
+
+// =================== TRAVA DE EDIÇÃO ===================
+let lockAtual = null;          // { tipo, id }
+let timerRenovarLock = null;
+let modoSomenteLeitura = false;
+
+async function adquirirLock(tipoCurto, id) {
+  modoSomenteLeitura = false;
+  if (!apiConfigurada()) { mostrarAvisoLock(null); return; }
+
+  const tipo = CHAVES_TIPO[tipoCurto] || tipoCurto;
+
+  // Aviso imediato, com o que já sabemos da última sincronização
+  const conhecido = lockDeOutro(tipo, id);
+  if (conhecido) mostrarAvisoLock(conhecido);
+
+  try {
+    const r = await apiPost({ acao: 'travar', tipo, id });
+    if (r.ok) {
+      lockAtual = { tipo, id };
+      modoSomenteLeitura = false;
+      mostrarAvisoLock(null);
+      if (timerRenovarLock) clearInterval(timerRenovarLock);
+      timerRenovarLock = setInterval(() => {
+        if (lockAtual) apiPost({ acao: 'renovarTrava', tipo: lockAtual.tipo, id: lockAtual.id }).catch(() => {});
+      }, 25000);
+    } else if (r.ocupado) {
+      lockAtual = null;
+      modoSomenteLeitura = true;
+      mostrarAvisoLock({ nome: r.porNome, email: r.porEmail, expiraEm: r.expiraEm });
+      aplicarSomenteLeitura();
+    }
+  } catch (e) {
+    // Sem conexão: deixa editar e resolve no controle de versão
+    mostrarAvisoLock(null);
+  }
+}
+
+function liberarLockAtual() {
+  if (timerRenovarLock) { clearInterval(timerRenovarLock); timerRenovarLock = null; }
+  if (lockAtual && apiConfigurada()) {
+    apiPost({ acao: 'liberarTrava', tipo: lockAtual.tipo, id: lockAtual.id }).catch(() => {});
+  }
+  lockAtual = null;
+  modoSomenteLeitura = false;
+}
+
+function mostrarAvisoLock(info) {
+  const el = document.getElementById('avisoLock');
+  if (!el) return;
+  if (!info) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+  const nome = (info.nome || info.email || 'Outra pessoa').split('@')[0];
+  el.className = 'flex items-center gap-2 px-4 py-2.5 text-sm';
+  el.style.cssText = 'background: var(--warn-soft); color: #92400E; border-bottom: 1px solid var(--border);';
+  el.innerHTML = `
+    <i data-lucide="lock" class="w-4 h-4 flex-shrink-0"></i>
+    <span class="flex-1"><strong>${escapeHtml(nome)}</strong> está editando este card agora. Você pode ver, mas não alterar.</span>
+    <button onclick="tentarAssumirEdicao()" class="btn btn-secondary text-xs py-1">Tentar de novo</button>
+  `;
+  el.classList.remove('hidden');
+  lucide.createIcons();
+}
+
+function aplicarSomenteLeitura() {
+  const corpo = document.getElementById('modalBody');
+  if (corpo) {
+    corpo.querySelectorAll('input, select, textarea, button').forEach(el => {
+      if (el.closest('#avisoLock')) return;
+      el.disabled = true;
+      el.style.opacity = '0.75';
+    });
+  }
+  const btnSalvar = document.getElementById('btnSave');
+  if (btnSalvar) { btnSalvar.disabled = true; btnSalvar.style.opacity = '0.5'; btnSalvar.textContent = 'Bloqueado'; }
+  const btnDel = document.getElementById('btnDelete');
+  if (btnDel) { btnDel.disabled = true; btnDel.style.opacity = '0.5'; }
+}
+
+async function tentarAssumirEdicao() {
+  if (!state.editingCard) return;
+  await adquirirLock(state.editingType, state.editingCard.id);
+  if (!modoSomenteLeitura) {
+    renderModal();
+    showToast('Card liberado — pode editar');
+  } else {
+    showToast('Ainda está sendo editado');
+  }
 }
 
 function renderModal() {
@@ -2054,6 +2488,7 @@ function renderModal() {
   document.getElementById('cardModal').classList.remove('hidden');
   document.getElementById('cardModal').classList.add('flex');
   lucide.createIcons();
+  if (modoSomenteLeitura) aplicarSomenteLeitura();
 }
 
 // =================== 5 PORQUÊS + ANEXOS (compartilhado entre desvio e ação) ===================
@@ -3400,13 +3835,127 @@ function enviarEmailStatusSQM() {
 }
 
 
+// =================== HISTÓRICO DETALHADO ===================
+const ROTULOS_CAMPOS = {
+  'fase': 'Fase', 'criticidade': 'Criticidade', 'responsavel': 'Responsável',
+  'registro.titulo': 'Título', 'registro.descricao': 'Descrição',
+  'registro.fornecedor': 'Fornecedor', 'registro.produto': 'Produto',
+  'registro.lote': 'Lote', 'registro.tipoNC': 'Tipo de NC',
+  'registro.unidade': 'Unidade', 'registro.notaFiscal': 'Nota fiscal',
+  'avaliacaoQualidade.decisaoUnidade': 'Decisão da unidade',
+  'avaliacaoQualidade.causaRaiz': 'Causa raiz',
+  'avaliacaoQualidade.apresentouPlano': 'Apresentou plano',
+  'avaliacaoQualidade.observacao': 'Observação (Qualidade)',
+  'compras.produtoMP': 'Produto/MP', 'compras.fornecedor': 'Fornecedor',
+  'aprovacoes.qualidade.status': 'Aprovação Qualidade',
+  'aprovacoes.she.status': 'Aprovação SHE',
+  'aprovacoes.operacoes.status': 'Aprovação Operações',
+  '(criacao)': 'Criação',
+};
+
+function rotularCampo(campo) {
+  if (ROTULOS_CAMPOS[campo]) return ROTULOS_CAMPOS[campo];
+  return campo.split('.').pop()
+    .replace(/([A-Z])/g, ' $1')
+    .replace(/^./, c => c.toUpperCase());
+}
+
+async function abrirHistoricoCard() {
+  const card = state.editingCard;
+  if (!card || !card.id) return;
+  const numero = card.numero || card.id;
+
+  const modal = document.getElementById('histModal');
+  const corpo = document.getElementById('histBody');
+  document.getElementById('histTitulo').textContent = 'Histórico · ' + numero;
+  corpo.innerHTML = '<div class="p-8 text-center text-sm" style="color: var(--text-3);">Carregando...</div>';
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+
+  if (!apiConfigurada()) {
+    corpo.innerHTML = '<div class="p-8 text-center text-sm" style="color: var(--text-3);">Histórico disponível só com sincronização ativa.</div>';
+    return;
+  }
+
+  try {
+    const r = await apiPost({ acao: 'historicoCard', numero });
+    if (!r.ok || !r.historico?.length) {
+      corpo.innerHTML = '<div class="p-8 text-center text-sm" style="color: var(--text-3);">Nenhuma alteração registrada ainda.</div>';
+      return;
+    }
+
+    // Agrupa por momento + pessoa
+    const grupos = [];
+    r.historico.forEach(h => {
+      const ultimo = grupos[grupos.length - 1];
+      if (ultimo && ultimo.quando === h.quando && ultimo.quem === h.quem) ultimo.itens.push(h);
+      else grupos.push({ quando: h.quando, quem: h.quem, itens: [h] });
+    });
+
+    corpo.innerHTML = `
+      <div class="p-5 space-y-3">
+        ${grupos.map(g => `
+          <div class="border rounded-lg overflow-hidden" style="border-color: var(--border);">
+            <div class="flex items-center gap-2 px-3 py-2" style="background: var(--surface-2);">
+              <span class="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style="background: var(--accent);">
+                ${escapeHtml(g.quem.split('@')[0].slice(0, 2).toUpperCase())}
+              </span>
+              <span class="text-sm font-medium">${escapeHtml(g.quem.split('@')[0])}</span>
+              <span class="text-xs ml-auto mono" style="color: var(--text-3);">${formatarDataHora(g.quando)}</span>
+            </div>
+            <div class="divide-y" style="border-color: var(--border);">
+              ${g.itens.map(h => `
+                <div class="px-3 py-2 text-sm">
+                  <div class="text-xs font-semibold mb-1" style="color: var(--text-2);">${escapeHtml(rotularCampo(h.campo))}</div>
+                  ${h.campo === '(criacao)'
+                    ? '<div class="text-xs" style="color: var(--ok);">Card criado</div>'
+                    : `<div class="flex items-start gap-2 text-xs">
+                        <span class="flex-1 line-through" style="color: var(--text-3);">${escapeHtml(h.de || '(vazio)')}</span>
+                        <i data-lucide="arrow-right" class="w-3 h-3 mt-0.5 flex-shrink-0" style="color: var(--text-3);"></i>
+                        <span class="flex-1 font-medium">${escapeHtml(h.para || '(vazio)')}</span>
+                      </div>`}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+    lucide.createIcons();
+  } catch (e) {
+    corpo.innerHTML = '<div class="p-8 text-center text-sm" style="color: var(--danger);">Não consegui carregar o histórico.</div>';
+  }
+}
+
+function fecharHistorico() {
+  const m = document.getElementById('histModal');
+  m.classList.add('hidden');
+  m.classList.remove('flex');
+}
+
+function formatarDataHora(iso) {
+  if (!iso) return '';
+  try {
+    const d = new Date(iso);
+    return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  } catch (e) { return iso; }
+}
+
 function closeCardModal() {
+  liberarLockAtual();
   document.getElementById('cardModal').classList.add('hidden');
   document.getElementById('cardModal').classList.remove('flex');
+  const aviso = document.getElementById('avisoLock');
+  if (aviso) { aviso.classList.add('hidden'); aviso.innerHTML = ''; }
   state.editingCard = null;
+  buscarNovidades();
 }
 
 function saveCard() {
+  if (modoSomenteLeitura) {
+    showToast('Card bloqueado — outra pessoa está editando');
+    return;
+  }
   const type = state.editingType;
   const isNew = !state.editingCard || state.editingCard._isNewInPhase || !state.editingCard.id;
   const originalFase = state.editingCard?.fase;
@@ -3647,6 +4196,10 @@ function saveCard() {
 }
 
 function deleteCard() {
+  if (modoSomenteLeitura) {
+    showToast('Card bloqueado — outra pessoa está editando');
+    return;
+  }
   const type = state.editingType;
   const card = state.editingCard;
   if (!card || !card.id) return;
@@ -3672,7 +4225,7 @@ function deleteCard() {
 
   saveData();
   if (apiConfigurada()) {
-    apiPost({ acao: 'excluirCard', tipo: type, id, usuario: emailUsuario() }).catch(e => console.warn(e));
+    enviarExclusao(type, id);
     enviarCard('lixeira', item);
   }
   closeCardModal();
@@ -3757,7 +4310,7 @@ function restaurarDaLixeira(idLixeira) {
   saveData();
   if (apiConfigurada()) {
     enviarCard(item.tipoOriginal, item.card);
-    apiPost({ acao: 'excluirCard', tipo: 'lixeira', id: idLixeira, usuario: emailUsuario() }).catch(e => console.warn(e));
+    enviarExclusao('lixeira', idLixeira);
   }
   render();
   lucide.createIcons();
@@ -3772,7 +4325,7 @@ function apagarDaLixeira(idLixeira) {
   state.data.lixeira = state.data.lixeira.filter(i => i.id !== idLixeira);
   saveData();
   if (apiConfigurada()) {
-    apiPost({ acao: 'excluirCard', tipo: 'lixeira', id: idLixeira, usuario: emailUsuario() }).catch(e => console.warn(e));
+    enviarExclusao('lixeira', idLixeira);
   }
   render();
   lucide.createIcons();
@@ -3785,7 +4338,7 @@ function esvaziarLixeira() {
   if (!confirm(`Apagar os ${itens.length} itens da lixeira definitivamente?\n\nIsso não pode ser desfeito.`)) return;
 
   if (apiConfigurada()) {
-    itens.forEach(i => apiPost({ acao: 'excluirCard', tipo: 'lixeira', id: i.id, usuario: emailUsuario() }).catch(e => console.warn(e)));
+    itens.forEach(i => enviarExclusao('lixeira', i.id));
   }
   state.data.lixeira = [];
   saveData();
