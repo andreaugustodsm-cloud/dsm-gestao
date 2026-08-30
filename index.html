@@ -73,9 +73,32 @@
   .stat-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(15,20,25,0.06); }
   .tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; }
   .signature-bar {
-    background: linear-gradient(90deg, var(--accent) 0%, var(--purple) 100%);
+    background: linear-gradient(100deg, #3B2FA8 0%, var(--accent) 45%, var(--purple) 100%);
     color: white;
+    box-shadow: inset 0 -1px 0 rgba(255,255,255,0.12);
   }
+  .topbar-icon {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 8px;
+    color: rgba(255,255,255,0.85); transition: background 0.15s, color 0.15s;
+  }
+  .topbar-icon:hover { background: rgba(255,255,255,0.18); color: white; }
+  .stat-pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+    background: rgba(255,255,255,0.12); font-weight: 500;
+    transition: background 0.15s;
+  }
+  .stat-pill:hover { background: rgba(255,255,255,0.22); }
+  .stat-pill strong { font-weight: 700; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .menu-item {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    padding: 9px 16px; font-size: 13.5px; text-align: left;
+    transition: background 0.12s;
+  }
+  .menu-item:hover { background: var(--surface-2); }
   .pulse-dot { animation: pulse 2s ease-in-out infinite; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   .fade-in { animation: fadeIn 0.2s ease-out; }
@@ -207,6 +230,11 @@
         <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
         Relatórios
       </button>
+      <button onclick="switchView('lixeira')" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm" data-view="lixeira">
+        <i data-lucide="trash-2" class="w-4 h-4"></i>
+        <span class="flex-1 text-left">Lixeira</span>
+        <span class="badge" style="background: var(--surface-2); color: var(--text-3);" id="lixeiraCount">0</span>
+      </button>
       <button onclick="switchView('config')" class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm" data-view="config">
         <i data-lucide="settings" class="w-4 h-4"></i>
         Configurações
@@ -215,16 +243,13 @@
     
     <div class="p-3 border-t border-gray-200" style="border-color: var(--border);">
       <div class="flex items-center gap-2.5 p-2 rounded-md" style="background: var(--surface-2);">
-        <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white" style="background: var(--accent);">
-          AA
+        <div id="sidebarIniciais" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background: var(--accent);">
+          —
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-medium truncate">André Augusto</div>
-          <div class="text-xs truncate" style="color: var(--text-3);">Gestor · Sete Lagoas</div>
+          <div id="sidebarNome" class="text-sm font-medium truncate">—</div>
+          <div class="text-xs truncate" style="color: var(--text-3);">Sete Lagoas · MG</div>
         </div>
-        <button onclick="doLogout()" class="btn-ghost p-1 rounded" title="Sair">
-          <i data-lucide="log-out" class="w-4 h-4"></i>
-        </button>
       </div>
     </div>
   </aside>
@@ -233,35 +258,63 @@
   <main class="flex-1 flex flex-col overflow-hidden">
     
     <!-- Header (System Status Bar - SIGNATURE ELEMENT) -->
-    <header class="signature-bar px-5 py-2.5 flex items-center justify-between text-sm">
-      <div class="flex items-center gap-6">
-        <div class="flex items-center gap-2">
-          <span class="pulse-dot w-2 h-2 rounded-full bg-white/80"></span>
-          <span class="opacity-90">Sistema ativo</span>
+    <header class="signature-bar px-4 py-2 flex items-center justify-between text-sm relative">
+      <div class="flex items-center gap-3 min-w-0">
+        <div class="flex items-center gap-2 flex-shrink-0">
+          <span class="pulse-dot w-1.5 h-1.5 rounded-full bg-emerald-300"></span>
+          <span class="text-xs font-medium tracking-wide opacity-80">AO VIVO</span>
         </div>
-        <div class="opacity-70">|</div>
-        <div id="statusBarStats" class="flex items-center gap-4 text-xs opacity-90">
-          <span>Carregando...</span>
+        <div class="w-px h-4 bg-white/20 flex-shrink-0"></div>
+        <div id="statusBarStats" class="flex items-center gap-1.5 text-xs min-w-0 overflow-x-auto no-scrollbar">
+          <span class="opacity-70">Carregando...</span>
         </div>
       </div>
-      <div class="flex items-center gap-3 text-xs">
-        <span id="syncStatus" class="px-2 py-1 rounded font-medium" style="background: rgba(255,255,255,0.15);">Conectando...</span>
-        <button onclick="sincronizarAgora()" class="flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-white/10 transition" title="Enviar minhas alterações agora">
-          <i data-lucide="cloud-upload" class="w-3.5 h-3.5"></i>
-          Salvar
+
+      <div class="flex items-center gap-1.5 flex-shrink-0">
+        <span id="syncStatus" class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium" style="background: rgba(255,255,255,0.15);">Conectando...</span>
+
+        <button onclick="sincronizarAgora()" class="topbar-icon" title="Enviar minhas alterações agora">
+          <i data-lucide="cloud-upload" class="w-4 h-4"></i>
         </button>
-        <button onclick="recarregarDoGoogle()" class="flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-white/10 transition" title="Buscar alterações da equipe">
-          <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
-          Atualizar
+        <button onclick="recarregarDoGoogle()" class="topbar-icon" title="Buscar alterações da equipe">
+          <i data-lucide="refresh-cw" class="w-4 h-4"></i>
         </button>
-        <button onclick="exportBackup()" class="flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-white/10 transition">
-          <i data-lucide="download-cloud" class="w-3.5 h-3.5"></i>
-          Backup
-        </button>
-        <button onclick="triggerImport()" class="flex items-center gap-1.5 px-2.5 py-1 rounded hover:bg-white/10 transition">
-          <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i>
-          Restaurar
-        </button>
+
+        <div class="w-px h-4 bg-white/20 mx-0.5"></div>
+
+        <!-- Menu da conta -->
+        <div class="relative">
+          <button onclick="toggleMenuConta(event)" class="flex items-center gap-2 pl-1 pr-2 py-1 rounded-full transition hover:bg-white/15">
+            <span id="avatarIniciais" class="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold" style="background: rgba(255,255,255,0.22);">—</span>
+            <span id="nomeUsuarioTopo" class="hidden md:block text-xs font-medium max-w-[110px] truncate">—</span>
+            <i data-lucide="chevron-down" class="w-3.5 h-3.5 opacity-70"></i>
+          </button>
+
+          <div id="menuConta" class="hidden absolute right-0 top-full mt-2 w-60 rounded-xl overflow-hidden z-50 text-left"
+               style="background: white; color: var(--text-1); box-shadow: 0 12px 32px rgba(15,23,42,0.18); border: 1px solid var(--border);">
+            <div class="px-4 py-3 border-b" style="border-color: var(--border); background: var(--surface-2);">
+              <div id="menuContaNome" class="text-sm font-semibold truncate">—</div>
+              <div id="menuContaEmail" class="text-xs truncate mono" style="color: var(--text-3);">—</div>
+            </div>
+            <div class="py-1">
+              <button onclick="exportBackup(); fecharMenuConta();" class="menu-item">
+                <i data-lucide="download-cloud" class="w-4 h-4"></i> Baixar backup
+              </button>
+              <button onclick="triggerImport(); fecharMenuConta();" class="menu-item">
+                <i data-lucide="upload-cloud" class="w-4 h-4"></i> Restaurar backup
+              </button>
+              <button onclick="switchView('lixeira'); fecharMenuConta();" class="menu-item">
+                <i data-lucide="trash-2" class="w-4 h-4"></i> Lixeira
+              </button>
+            </div>
+            <div class="py-1 border-t" style="border-color: var(--border);">
+              <button onclick="doLogout()" class="menu-item" style="color: var(--danger);">
+                <i data-lucide="log-out" class="w-4 h-4"></i> Sair da conta
+              </button>
+            </div>
+          </div>
+        </div>
+
         <input type="file" id="importFile" accept=".json" class="hidden" onchange="importBackup(event)">
       </div>
     </header>
@@ -381,23 +434,26 @@ const AREAS = ['Facilities', 'Produção', 'Manutenção', 'Qualidade', 'Logíst
 const UNIDADES = ['MG - Sete Lagoas', 'MT - Barra do Garças', 'MG - Santa Luzia'];
 const CATEGORIAS = ['Procedimento', 'Equipamento', 'Matéria-Prima', 'Processo', 'Pessoa', 'Ambiente'];
 const TIPOS_DESVIO = ['Entrega Fora do Prazo', 'Contaminação', 'Falha de comunicação', 'Qualidade', 'Ruptura de estoque', 'Sobredosagem', 'Não conformidade', 'Outro'];
-const RESPONSAVEIS = ['André Augusto', 'Izabela Koh', 'Carol Silva', 'Hadan Oliveira', 'Mauro Gonçalves', 'Larissa Amaral', 'Elizabeth N. Gonzaga', 'Priscilla Silva', 'Anna Castro'];
+let RESPONSAVEIS = ['André Augusto'];
 
 // Emails vinculados (para envio via mailto)
+// Cadastro de e-mails. As 4 primeiras chaves sao usadas pelos disparos
+// automaticos do sistema — mantenha elas. As pessoas voce cadastra nas Configuracoes.
 const EMAILS_EQUIPE = {
-  qualidade: 'qualidade.sl@dsm-firmenich.com',
-  formulacao: 'tamara.formulacao@dsm-firmenich.com',
-  comercial: 'comercial.sl@dsm-firmenich.com',
-  gerencias: 'gerencias.sl@dsm-firmenich.com',
+  qualidade: 'andre.augusto@dsm-firmenich.com',
+  formulacao: 'andre.augusto@dsm-firmenich.com',
+  comercial: 'andre.augusto@dsm-firmenich.com',
+  gerencias: 'andre.augusto@dsm-firmenich.com',
   'André Augusto': 'andre.augusto@dsm-firmenich.com',
-  'Izabela Koh': 'izabela.koh@dsm-firmenich.com',
-  'Carol Silva': 'carol.silva@dsm-firmenich.com',
-  'Hadan Oliveira': 'hadan.oliveira@dsm-firmenich.com',
-  'Mauro Gonçalves': 'mauro.goncalves@dsm-firmenich.com',
-  'Larissa Amaral': 'larissa.amaral@dsm-firmenich.com',
-  'Elizabeth N. Gonzaga': 'elizabeth.gonzaga@dsm-firmenich.com',
-  'Priscilla Silva': 'priscilla.silva@dsm-firmenich.com',
-  'Anna Castro': 'anna.castro@dsm-firmenich.com',
+};
+
+// Chaves que o sistema usa internamente (nao podem ser removidas)
+const CHAVES_FIXAS = ['qualidade', 'formulacao', 'comercial', 'gerencias'];
+const ROTULOS_CHAVES = {
+  qualidade: 'Equipe da Qualidade',
+  formulacao: 'Equipe de Formulação',
+  comercial: 'Equipe Comercial',
+  gerencias: 'Gerências (Qualidade, SHE, Operações)',
 };
 
 function getEmail(nomeOuKey) {
@@ -766,6 +822,14 @@ const FIREBASE_CONFIG = {
   appId: "1:392206614882:web:220cc622fd1fb2a1d46c3b"
 };
 
+// Só e-mails deste domínio podem criar conta e entrar
+const DOMINIO_PERMITIDO = 'dsm-firmenich.com';
+
+function emailAutorizado(email) {
+  return typeof email === 'string'
+    && email.trim().toLowerCase().endsWith('@' + DOMINIO_PERMITIDO);
+}
+
 const STORAGE_KEY = 'dsm_gestao_v3_cache';
 const INTERVALO_AUTOSAVE = 60000; // 60 segundos
 
@@ -779,6 +843,17 @@ function apiConfigurada() {
   return API_URL && API_URL.indexOf('script.google.com') > -1;
 }
 
+async function pegarToken() {
+  try {
+    const u = auth?.currentUser;
+    if (!u) return '';
+    return await u.getIdToken();
+  } catch (e) {
+    console.warn('Não consegui obter o token:', e);
+    return '';
+  }
+}
+
 async function apiGet(acao) {
   const url = API_URL + '?acao=' + encodeURIComponent(acao) + '&t=' + Date.now();
   const resp = await fetch(url);
@@ -787,6 +862,8 @@ async function apiGet(acao) {
 }
 
 async function apiPost(corpo) {
+  // O backend confere este token e só aceita e-mails @dsm-firmenich.com
+  corpo.idToken = await pegarToken();
   const resp = await fetch(API_URL, {
     method: 'POST',
     // text/plain evita o "preflight" do navegador, que o Apps Script não responde
@@ -794,7 +871,11 @@ async function apiPost(corpo) {
     body: JSON.stringify(corpo),
   });
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
-  return await resp.json();
+  const r = await resp.json();
+  if (r && r.erro && /autoriza|credencial|domínio|dominio/i.test(r.erro)) {
+    showToast('Acesso negado pelo servidor — faça login de novo');
+  }
+  return r;
 }
 
 function marcarStatusSync(estado, texto) {
@@ -823,7 +904,7 @@ async function carregarDados() {
   // 2) Busca no Google
   try {
     marcarStatusSync('salvando', 'Carregando...');
-    const r = await apiGet('carregar');
+    const r = await apiPost({ acao: 'carregar' });
     if (!r.ok) throw new Error(r.erro || 'Falha ao carregar');
 
     const dados = r.dados;
@@ -837,7 +918,7 @@ async function carregarDados() {
       return inicial;
     }
 
-    if (dados._config?.emailsEquipe) Object.assign(EMAILS_EQUIPE, dados._config.emailsEquipe);
+    aplicarConfigSalva(dados);
     salvarCacheLocal(dados);
     marcarStatusSync('ok', 'Sincronizado');
     return dados;
@@ -849,12 +930,20 @@ async function carregarDados() {
   }
 }
 
+function aplicarConfigSalva(dados) {
+  if (!dados || !dados._config) return;
+  if (dados._config.emailsEquipe) Object.assign(EMAILS_EQUIPE, dados._config.emailsEquipe);
+  if (Array.isArray(dados._config.responsaveis) && dados._config.responsaveis.length) {
+    RESPONSAVEIS = dados._config.responsaveis.slice();
+  }
+}
+
 function carregarCacheLocal() {
   try {
     const bruto = localStorage.getItem(STORAGE_KEY);
     if (bruto) {
       const d = JSON.parse(bruto);
-      if (d._config?.emailsEquipe) Object.assign(EMAILS_EQUIPE, d._config.emailsEquipe);
+      aplicarConfigSalva(d);
       return d;
     }
   } catch (e) { console.warn(e); }
@@ -1029,6 +1118,10 @@ async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const senha = document.getElementById('loginPassword').value;
   if (!email || !senha) { mostrarErroAuth('Preencha e-mail e senha.'); return; }
+  if (!emailAutorizado(email)) {
+    mostrarErroAuth('Só e-mails @' + DOMINIO_PERMITIDO + ' têm acesso a este sistema.');
+    return;
+  }
   const btn = document.getElementById('btnEntrar');
   btn.disabled = true; btn.textContent = 'Entrando...';
   try {
@@ -1047,6 +1140,10 @@ async function criarConta() {
   const senha = document.getElementById('cadSenha').value;
   if (!nome) { mostrarErroAuth('Informe seu nome completo.'); return; }
   if (!email || !senha) { mostrarErroAuth('Preencha e-mail e senha.'); return; }
+  if (!emailAutorizado(email)) {
+    mostrarErroAuth('Só e-mails @' + DOMINIO_PERMITIDO + ' podem criar conta neste sistema.');
+    return;
+  }
   if (senha.length < 6) { mostrarErroAuth('A senha precisa ter pelo menos 6 caracteres.'); return; }
   const btn = document.getElementById('btnCriar');
   btn.disabled = true; btn.textContent = 'Criando...';
@@ -1063,6 +1160,10 @@ async function recuperarSenha() {
   limparAvisosAuth();
   const email = document.getElementById('loginEmail').value.trim();
   if (!email) { mostrarErroAuth('Digite seu e-mail acima e clique de novo.'); return; }
+  if (!emailAutorizado(email)) {
+    mostrarErroAuth('Só e-mails @' + DOMINIO_PERMITIDO + ' têm acesso a este sistema.');
+    return;
+  }
   try {
     await auth.sendPasswordResetEmail(email);
     mostrarSucessoAuth('Enviei um link de redefinição para ' + email + '. Confira a caixa de entrada e o spam.');
@@ -1072,15 +1173,36 @@ async function recuperarSenha() {
 }
 
 async function entrarNoApp(usuario) {
+  // Trava final: conta de fora do domínio não entra, mesmo que tenha sido criada por outro caminho
+  if (!emailAutorizado(usuario.email)) {
+    try { await auth.signOut(); } catch (e) {}
+    document.getElementById('loginScreen').classList.remove('hidden');
+    document.getElementById('app').classList.add('hidden');
+    document.getElementById('app').classList.remove('flex');
+    switchAuthTab('entrar');
+    mostrarErroAuth('A conta ' + usuario.email + ' não tem acesso. Use seu e-mail @' + DOMINIO_PERMITIDO + '.');
+    const b = document.getElementById('btnEntrar');
+    if (b) { b.disabled = false; b.textContent = 'Entrar'; }
+    return;
+  }
+
   const nome = usuario.displayName
     || usuario.email.split('@')[0].split('.').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
   state.currentUser = { email: usuario.email, name: nome, uid: usuario.uid };
+
+  // Destrava os botões da tela de login
+  const bE = document.getElementById('btnEntrar');
+  if (bE) { bE.disabled = false; bE.textContent = 'Entrar'; }
+  const bC = document.getElementById('btnCriar');
+  if (bC) { bC.disabled = false; bC.textContent = 'Criar conta e entrar'; }
 
   document.getElementById('loginScreen').classList.add('hidden');
   document.getElementById('app').classList.remove('hidden');
   document.getElementById('app').classList.add('flex');
 
   state.data = await carregarDados();
+  state.data.lixeira = state.data.lixeira || [];
+  atualizarIdentidadeUsuario();
   render();
   lucide.createIcons();
   iniciarAutosave();
@@ -1099,9 +1221,19 @@ async function doLogout() {
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('app').classList.add('hidden');
   document.getElementById('app').classList.remove('flex');
-  const btn = document.getElementById('btnEntrar');
-  if (btn) { btn.disabled = false; btn.textContent = 'Entrar'; }
-  document.getElementById('loginPassword').value = '';
+
+  // Volta a tela para o estado inicial de "Entrar"
+  switchAuthTab('entrar');
+  const bE = document.getElementById('btnEntrar');
+  if (bE) { bE.disabled = false; bE.textContent = 'Entrar'; }
+  const bC = document.getElementById('btnCriar');
+  if (bC) { bC.disabled = false; bC.textContent = 'Criar conta e entrar'; }
+  ['loginPassword', 'cadNome', 'cadEmail', 'cadSenha'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  limparAvisosAuth();
+  fecharMenuConta();
 }
 
 // =================== LINK POR CARD ===================
@@ -1220,6 +1352,12 @@ function render() {
       btnNew.style.display = 'none';
       container.innerHTML = renderRelatorios();
       break;
+    case 'lixeira':
+      titleEl.textContent = 'Lixeira';
+      subEl.textContent = (state.data.lixeira || []).length + ' itens · restaure ou apague de vez';
+      btnNew.style.display = 'none';
+      container.innerHTML = renderLixeira();
+      break;
     case 'config':
       titleEl.textContent = 'Configurações';
       subEl.textContent = 'Notificações · Integrações · Backup';
@@ -1241,22 +1379,66 @@ function updateStatusBar() {
   const ncAguardando = (state.data.nc || []).filter(n => n.fase === 'aguardandoFornecedor').length;
   
   document.getElementById('statusBarStats').innerHTML = `
-    <span>🔴 <strong>${criticosAbertos}</strong> desvios críticos</span>
-    <span class="opacity-60">·</span>
-    <span>⏰ <strong>${vencendo.length + vencidas.length}</strong> ações urgentes</span>
-    <span class="opacity-60">·</span>
-    <span>⛔ <strong>${bloqueadas}</strong> bloqueadas</span>
-    <span class="opacity-60">·</span>
-    <span>📆 <strong>${atrasados}</strong> desvios atrasados</span>
-    <span class="opacity-60">·</span>
-    <span>📮 <strong>${ncAguardando}</strong> NCs aguardando fornecedor</span>
+    <button onclick="irParaFiltro('desvios','criticidade:1')" class="stat-pill" title="Ver desvios críticos">
+      <span style="color:#FCA5A5">●</span> <strong>${criticosAbertos}</strong> críticos
+    </button>
+    <button onclick="irParaFiltro('acoes','')" class="stat-pill" title="Ver ações">
+      <span style="color:#FDE68A">●</span> <strong>${vencendo.length + vencidas.length}</strong> urgentes
+    </button>
+    <button onclick="irParaFiltro('acoes','bloqueado')" class="stat-pill" title="Ver ações bloqueadas">
+      <span style="color:#FDBA74">●</span> <strong>${bloqueadas}</strong> bloqueadas
+    </button>
+    <button onclick="irParaFiltro('desvios','atraso')" class="stat-pill" title="Ver desvios atrasados">
+      <span style="color:#C4B5FD">●</span> <strong>${atrasados}</strong> atrasados
+    </button>
+    <button onclick="irParaFiltro('nc','aguardando')" class="stat-pill" title="Ver NCs aguardando fornecedor">
+      <span style="color:#93C5FD">●</span> <strong>${ncAguardando}</strong> c/ fornecedor
+    </button>
     ${(vencendo.length + vencidas.length) > 0 ? `
-      <span class="opacity-60">·</span>
-      <button onclick="notificarTodosVencendo()" class="ml-2 px-2 py-0.5 rounded bg-white/20 hover:bg-white/30 text-xs font-medium transition">
-        📧 Notificar todos
+      <button onclick="notificarTodosVencendo()" class="stat-pill" style="background: rgba(255,255,255,0.9); color: var(--accent);" title="Enviar um e-mail para cada responsável">
+        <i data-lucide="mail" class="w-3 h-3"></i> Notificar
       </button>
     ` : ''}
   `;
+  lucide.createIcons();
+}
+
+function irParaFiltro(view, filtro) {
+  switchView(view);
+  state.filter = filtro;
+  const busca = document.getElementById('searchInput');
+  if (busca) busca.value = filtro;
+  render();
+  lucide.createIcons();
+}
+
+// ====== Menu da conta ======
+function toggleMenuConta(ev) {
+  ev.stopPropagation();
+  const m = document.getElementById('menuConta');
+  m.classList.toggle('hidden');
+  lucide.createIcons();
+}
+function fecharMenuConta() {
+  document.getElementById('menuConta')?.classList.add('hidden');
+}
+document.addEventListener('click', e => {
+  const menu = document.getElementById('menuConta');
+  if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target)) fecharMenuConta();
+});
+
+function atualizarIdentidadeUsuario() {
+  const u = state.currentUser;
+  if (!u) return;
+  const iniciais = (u.name || u.email).split(' ').filter(Boolean).slice(0, 2)
+    .map(p => p[0]).join('').toUpperCase();
+  const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  set('avatarIniciais', iniciais);
+  set('nomeUsuarioTopo', (u.name || '').split(' ')[0]);
+  set('menuContaNome', u.name || '');
+  set('menuContaEmail', u.email || '');
+  set('sidebarNome', u.name || '');
+  set('sidebarIniciais', iniciais);
 }
 
 function notificarTodosVencendo() {
@@ -1296,8 +1478,10 @@ function updateCounts() {
   document.getElementById('acoesCount').textContent = acoesAtivas;
   const ncEl = document.getElementById('ncCount');
   const sqmEl = document.getElementById('sqmCount');
+  const lixEl = document.getElementById('lixeiraCount');
   if (ncEl) ncEl.textContent = ncAtivas;
   if (sqmEl) sqmEl.textContent = sqmAtivas;
+  if (lixEl) lixEl.textContent = (state.data.lixeira || []).length;
 }
 
 // =================== DASHBOARD ===================
@@ -3463,18 +3647,151 @@ function saveCard() {
 }
 
 function deleteCard() {
-  if (!confirm('Excluir este card definitivamente?')) return;
   const type = state.editingType;
-  const id = state.editingCard.id;
+  const card = state.editingCard;
+  if (!card || !card.id) return;
+  if (!confirm('Mover este card para a lixeira?\n\nEle sai do quadro mas fica guardado — dá pra restaurar depois.')) return;
+
+  const id = card.id;
   if (type === 'desvio') state.data.desvios = state.data.desvios.filter(d => d.id !== id);
   else if (type === 'acao') state.data.acoes = state.data.acoes.filter(a => a.id !== id);
   else if (type === 'nc') state.data.nc = (state.data.nc || []).filter(n => n.id !== id);
   else if (type === 'sqm') state.data.sqm = (state.data.sqm || []).filter(s => s.id !== id);
+
+  const item = {
+    id: 'LIX-' + Date.now() + '-' + id,
+    tipoOriginal: type,
+    numero: card.numero || card.id,
+    titulo: card.registro?.titulo || card.compras?.produtoMP || card.titulo || '(sem título)',
+    excluidoEm: new Date().toISOString(),
+    excluidoPor: emailUsuario(),
+    card: JSON.parse(JSON.stringify(card)),
+  };
+  state.data.lixeira = state.data.lixeira || [];
+  state.data.lixeira.unshift(item);
+
   saveData();
-  if (apiConfigurada()) apiPost({ acao: 'excluirCard', tipo: type, id, usuario: emailUsuario() }).catch(e => console.warn(e));
+  if (apiConfigurada()) {
+    apiPost({ acao: 'excluirCard', tipo: type, id, usuario: emailUsuario() }).catch(e => console.warn(e));
+    enviarCard('lixeira', item);
+  }
   closeCardModal();
   render();
-  showToast('Excluído');
+  showToast('Movido para a lixeira');
+}
+
+// =================== LIXEIRA ===================
+function renderLixeira() {
+  const itens = state.data.lixeira || [];
+  const rotulos = { desvio: 'Desvio', acao: 'Ação', nc: 'NC Fornecedor', sqm: 'SQM' };
+  const cores = { desvio: 'var(--danger)', acao: 'var(--warn)', nc: 'var(--purple)', sqm: 'var(--teal)' };
+
+  if (itens.length === 0) {
+    return `
+      <div class="p-6">
+        <div class="bg-white rounded-lg border p-12 text-center" style="border-color: var(--border);">
+          <i data-lucide="trash-2" class="w-10 h-10 mx-auto mb-3" style="color: var(--text-3);"></i>
+          <h3 class="font-semibold mb-1">A lixeira está vazia</h3>
+          <p class="text-sm" style="color: var(--text-2);">Cards excluídos aparecem aqui e podem ser restaurados.</p>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-4">
+        <p class="text-sm" style="color: var(--text-2);">
+          ${itens.length} ${itens.length === 1 ? 'item guardado' : 'itens guardados'}. Restaure o que precisar ou apague de vez.
+        </p>
+        <button onclick="esvaziarLixeira()" class="btn btn-secondary text-xs" style="color: var(--danger);">
+          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          Esvaziar lixeira
+        </button>
+      </div>
+
+      <div class="space-y-2">
+        ${itens.map(it => `
+          <div class="bg-white rounded-lg border p-4 flex items-center gap-4" style="border-color: var(--border);">
+            <div class="w-1 h-10 rounded-full flex-shrink-0" style="background: ${cores[it.tipoOriginal] || 'var(--text-3)'};"></div>
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="tag" style="background: var(--surface-2); color: var(--text-2);">${rotulos[it.tipoOriginal] || it.tipoOriginal}</span>
+                <span class="text-xs mono" style="color: var(--text-3);">${escapeHtml(it.numero || '')}</span>
+              </div>
+              <div class="text-sm font-medium truncate">${escapeHtml(it.titulo || '')}</div>
+              <div class="text-xs mt-0.5" style="color: var(--text-3);">
+                Excluído em ${formatDate(it.excluidoEm)} por ${escapeHtml((it.excluidoPor || '').split('@')[0])}
+              </div>
+            </div>
+            <button onclick="restaurarDaLixeira('${it.id}')" class="btn btn-secondary text-xs">
+              <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+              Restaurar
+            </button>
+            <button onclick="apagarDaLixeira('${it.id}')" class="btn-ghost p-2 rounded" title="Apagar definitivamente" style="color: var(--danger);">
+              <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function restaurarDaLixeira(idLixeira) {
+  const itens = state.data.lixeira || [];
+  const item = itens.find(i => i.id === idLixeira);
+  if (!item) return;
+
+  const destino = { desvio: 'desvios', acao: 'acoes', nc: 'nc', sqm: 'sqm' }[item.tipoOriginal];
+  if (!destino) { showToast('Não consegui identificar o tipo do card'); return; }
+
+  state.data[destino] = state.data[destino] || [];
+  if (state.data[destino].some(c => c.id === item.card.id)) {
+    showToast('Já existe um card com esse número no quadro');
+    return;
+  }
+  state.data[destino].push(item.card);
+  state.data.lixeira = itens.filter(i => i.id !== idLixeira);
+
+  saveData();
+  if (apiConfigurada()) {
+    enviarCard(item.tipoOriginal, item.card);
+    apiPost({ acao: 'excluirCard', tipo: 'lixeira', id: idLixeira, usuario: emailUsuario() }).catch(e => console.warn(e));
+  }
+  render();
+  lucide.createIcons();
+  showToast(`${item.numero} restaurado`);
+}
+
+function apagarDaLixeira(idLixeira) {
+  const item = (state.data.lixeira || []).find(i => i.id === idLixeira);
+  if (!item) return;
+  if (!confirm(`Apagar ${item.numero} definitivamente?\n\nIsso não pode ser desfeito.`)) return;
+
+  state.data.lixeira = state.data.lixeira.filter(i => i.id !== idLixeira);
+  saveData();
+  if (apiConfigurada()) {
+    apiPost({ acao: 'excluirCard', tipo: 'lixeira', id: idLixeira, usuario: emailUsuario() }).catch(e => console.warn(e));
+  }
+  render();
+  lucide.createIcons();
+  showToast('Apagado definitivamente');
+}
+
+function esvaziarLixeira() {
+  const itens = state.data.lixeira || [];
+  if (!itens.length) return;
+  if (!confirm(`Apagar os ${itens.length} itens da lixeira definitivamente?\n\nIsso não pode ser desfeito.`)) return;
+
+  if (apiConfigurada()) {
+    itens.forEach(i => apiPost({ acao: 'excluirCard', tipo: 'lixeira', id: i.id, usuario: emailUsuario() }).catch(e => console.warn(e)));
+  }
+  state.data.lixeira = [];
+  saveData();
+  render();
+  lucide.createIcons();
+  showToast('Lixeira esvaziada');
 }
 
 // =================== RELATÓRIOS ===================
@@ -3692,29 +4009,53 @@ function renderConfig() {
         </div>
       </div>
       
-      <!-- Emails da equipe -->
+      <!-- Caixas de entrada do sistema -->
       <div class="bg-white rounded-lg border p-5 mb-4" style="border-color: var(--border);">
-        <h3 class="font-bold mb-1">👥 E-mails da equipe</h3>
+        <h3 class="font-bold mb-1">📬 Destinos dos avisos automáticos</h3>
         <p class="text-sm mb-4" style="color: var(--text-2);">
-          E-mails usados nos disparos automáticos. Edite conforme a estrutura da sua equipe.
+          Para onde o sistema manda cada tipo de aviso. Comece apontando tudo para você e ajuste conforme a equipe entrar.
         </p>
-        <div id="emailsEquipeList" class="space-y-1">
-          ${Object.entries(EMAILS_EQUIPE).map(([nome, email]) => `
-            <div class="flex items-center gap-2 p-2 rounded hover:bg-gray-50">
-              <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background: var(--accent);">
-                ${nome.split(' ').map(x => x[0]).join('').substring(0, 2).toUpperCase()}
-              </div>
-              <div class="flex-1 min-w-0">
-                <div class="text-sm font-medium truncate">${escapeHtml(nome)}</div>
-                <input class="input text-xs mono mt-0.5" data-emailkey="${escapeHtml(nome)}" value="${escapeHtml(email)}" onchange="atualizarEmailEquipe(this)">
-              </div>
-              <span class="tag" style="background: var(--surface-2); color: var(--text-2);">Ativo</span>
+        <div class="space-y-3">
+          ${CHAVES_FIXAS.map(chave => `
+            <div>
+              <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">${ROTULOS_CHAVES[chave].toUpperCase()}</label>
+              <input class="input text-sm mono" data-emailkey="${chave}" value="${escapeHtml(EMAILS_EQUIPE[chave] || '')}"
+                     placeholder="nome@dsm-firmenich.com" onchange="atualizarEmailEquipe(this)">
             </div>
           `).join('')}
         </div>
-        <p class="text-xs mt-3" style="color: var(--text-3);">
-          <i data-lucide="info" class="w-3 h-3 inline"></i> Alterações são salvas no navegador. Faça backup pra não perder ao trocar de PC.
+      </div>
+
+      <!-- Pessoas -->
+      <div class="bg-white rounded-lg border p-5 mb-4" style="border-color: var(--border);">
+        <div class="flex items-start justify-between mb-1">
+          <h3 class="font-bold">👥 Pessoas da equipe</h3>
+          <button onclick="adicionarPessoa()" class="btn btn-secondary text-xs">
+            <i data-lucide="user-plus" class="w-3.5 h-3.5"></i>
+            Adicionar pessoa
+          </button>
+        </div>
+        <p class="text-sm mb-4" style="color: var(--text-2);">
+          Quem aparece nos campos de responsável e recebe os avisos de prazo. Cada pessoa cria a própria senha no primeiro acesso.
         </p>
+        <div class="space-y-1">
+          ${listaPessoas().map(nome => `
+            <div class="flex items-center gap-2 p-2 rounded hover:bg-gray-50">
+              <div class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background: var(--accent);">
+                ${escapeHtml(nome.split(' ').filter(Boolean).slice(0,2).map(x => x[0]).join('').toUpperCase())}
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium truncate">${escapeHtml(nome)}</div>
+                <input class="input text-xs mono mt-0.5" data-emailkey="${escapeHtml(nome)}" value="${escapeHtml(EMAILS_EQUIPE[nome] || '')}"
+                       placeholder="nome@dsm-firmenich.com" onchange="atualizarEmailEquipe(this)">
+              </div>
+              <button onclick="removerPessoa('${escapeHtml(nome).replace(/'/g, "\\'")}')" class="btn-ghost p-1.5 rounded" title="Remover" style="color: var(--danger);">
+                <i data-lucide="x" class="w-4 h-4"></i>
+              </button>
+            </div>
+          `).join('')}
+          ${listaPessoas().length === 0 ? '<p class="text-xs italic" style="color: var(--text-3);">Ninguém cadastrado ainda.</p>' : ''}
+        </div>
       </div>
       
       <!-- Webhooks (Power Automate) -->
@@ -3774,30 +4115,55 @@ function renderConfig() {
         </div>
       </div>
       
-      <!-- Reset -->
-      <div class="bg-white rounded-lg border p-5" style="border-color: var(--danger);">
-        <h3 class="font-bold mb-1" style="color: var(--danger);">⚠️ Zona de risco</h3>
-        <p class="text-sm mb-4" style="color: var(--text-2);">
-          Apaga todos os dados locais e restaura os exemplos originais.
-        </p>
-        <button onclick="resetarDados()" class="btn" style="background: var(--danger); color: white;">
-          <i data-lucide="trash-2" class="w-4 h-4"></i>
-          Resetar dados
-        </button>
-      </div>
     </div>
   `;
 }
 
 // =================== BACKUP ===================
-async function resetarDados() {
-  if (!confirm('APAGAR todos os dados e voltar aos exemplos? Isso afeta TODA a equipe.')) return;
-  if (!confirm('Tem certeza mesmo? Não dá pra desfazer.')) return;
-  localStorage.removeItem(STORAGE_KEY);
-  state.data = JSON.parse(JSON.stringify(seedData));
+
+function listaPessoas() {
+  return Object.keys(EMAILS_EQUIPE).filter(k => !CHAVES_FIXAS.includes(k));
+}
+
+function adicionarPessoa() {
+  const nome = prompt('Nome completo da pessoa:');
+  if (!nome || !nome.trim()) return;
+  const limpo = nome.trim();
+  if (EMAILS_EQUIPE[limpo]) { showToast('Essa pessoa já está cadastrada'); return; }
+
+  const sugestao = limpo.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .split(' ').filter(Boolean).slice(0, 2).join('.') + '@dsm-firmenich.com';
+  const email = prompt('E-mail de ' + limpo + ':', sugestao);
+  if (email === null) return;
+
+  EMAILS_EQUIPE[limpo] = (email || '').trim();
+  if (!RESPONSAVEIS.includes(limpo)) RESPONSAVEIS.push(limpo);
+
+  state.data._config = state.data._config || {};
+  state.data._config.emailsEquipe = state.data._config.emailsEquipe || {};
+  state.data._config.emailsEquipe[limpo] = EMAILS_EQUIPE[limpo];
+  state.data._config.responsaveis = RESPONSAVEIS.slice();
+
+  saveData();
   render();
-  if (apiConfigurada()) await sincronizarAgora(true);
-  showToast('Dados resetados');
+  lucide.createIcons();
+  showToast(limpo.split(' ')[0] + ' cadastrado');
+}
+
+function removerPessoa(nome) {
+  if (!confirm('Remover ' + nome + ' da lista?\n\nOs cards que já têm essa pessoa como responsável não mudam.')) return;
+  delete EMAILS_EQUIPE[nome];
+  RESPONSAVEIS = RESPONSAVEIS.filter(r => r !== nome);
+
+  state.data._config = state.data._config || {};
+  if (state.data._config.emailsEquipe) delete state.data._config.emailsEquipe[nome];
+  state.data._config.responsaveis = RESPONSAVEIS.slice();
+
+  saveData();
+  render();
+  lucide.createIcons();
+  showToast(nome.split(' ')[0] + ' removido');
 }
 
 function atualizarEmailEquipe(input) {
