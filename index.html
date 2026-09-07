@@ -454,7 +454,6 @@ const FASES_DESVIO = [
   { id: 'registro', label: 'Registro', color: '#2563EB', softBg: '#DBEAFE' },
   { id: 'avalQualidade', label: 'Aval. Qualidade', color: '#059669', softBg: '#D1FAE5' },
   { id: 'avalFormulacao', label: 'Aval. Formulação', color: '#7C3AED', softBg: '#EDE9FE' },
-  { id: 'rca', label: 'RCA', color: '#0D9488', softBg: '#CCFBF1' },
   { id: 'concluido', label: 'Concluído', color: '#6B7280', softBg: '#E5E7EB' },
 ];
 
@@ -475,14 +474,22 @@ const FASES_NC = [
 
 const FASES_SQM = [
   { id: 'compras', label: 'Compras (Registro)', color: '#2563EB', softBg: '#DBEAFE' },
+  { id: 'acaoIRIS', label: 'Ação (IRIS)', color: '#D97706', softBg: '#FEF3C7' },
   { id: 'formulacao', label: 'Val. Formulação', color: '#7C3AED', softBg: '#EDE9FE' },
   { id: 'avaliacaoSQM', label: 'Aval. SQM Qualidade', color: '#059669', softBg: '#D1FAE5' },
-  { id: 'aprovacaoGerencia', label: 'Aprovação Gerência', color: '#D97706', softBg: '#FEF3C7' },
-  { id: 'concluido', label: 'Finalizado', color: '#6B7280', softBg: '#E5E7EB' },
+  { id: 'aprovacaoGerencia', label: 'Aprovação Gerência', color: '#4F46E5', softBg: '#E0E7FF' },
+  { id: 'aprovado', label: 'Aprovado', color: '#059669', softBg: '#D1FAE5' },
+  { id: 'reprovado', label: 'Reprovado', color: '#DC2626', softBg: '#FEE2E2' },
 ];
 
-const TIPOS_NC = ['Fora de especificação', 'Embalagem/Rotulagem', 'Contaminação', 'Falta/Sobra de quantidade', 'Documentação', 'Prazo/Validade', 'Transporte', 'Outro'];
-const DECISOES_UNIDADE = ['Aceitar', 'Aceitar com concessão', 'Devolver ao fornecedor', 'Reprocessar', 'Descartar'];
+const TIPOS_NC = ['Problema constatado durante o uso', 'Problema constatado em análise de liberação', 'Problema constatado no recebimento', 'Problema constatado no armazenamento', 'Problema constatado em análise de monitoramento', 'Auto de Infração', 'Problema na embalagem da MP'];
+// Problema Macro (classificação de topo da NC)
+const PROBLEMA_MACRO_NC = ['Avaria', 'Fora de Especificação', 'IQF', 'Falha de Produto', 'Documentação', 'SHE', 'Logística', 'Contaminação'];
+// Classificação do item da NC (campo "NC")
+const CLASSIFICACAO_NC = ['Matéria-prima', 'Embalagem', 'Semi Acabado', 'Monitoramento IQF'];
+// Quantidade de parâmetros fora de especificação (níveis de garantia)
+const QTD_PARAMETROS_FE = ['1', '2', '3', 'Acima de 3', 'N.A'];
+const DECISOES_UNIDADE = ['Liberado sob concessão', 'Formalizar ocorrência', 'Rejeitar e destacar', 'Reprocessar', 'Rejeitar e devolver ao fornecedor', 'Devolução parcial'];
 const GERENCIAS_SQM = [
   { id: 'qualidade', label: 'Gerência de Qualidade' },
   { id: 'she', label: 'Gerência de SHE' },
@@ -497,9 +504,13 @@ const CRITICIDADES = [
 ];
 
 const AREAS = ['Facilities', 'Produção', 'Manutenção', 'Qualidade', 'Logística', 'Segurança', 'RH'];
-const UNIDADES = ['MG - Sete Lagoas', 'MT - Barra do Garças', 'MG - Santa Luzia'];
-const CATEGORIAS = ['Procedimento', 'Equipamento', 'Matéria-Prima', 'Processo', 'Pessoa', 'Ambiente'];
-const TIPOS_DESVIO = ['Entrega Fora do Prazo', 'Contaminação', 'Falha de comunicação', 'Qualidade', 'Ruptura de estoque', 'Sobredosagem', 'Não conformidade', 'Outro'];
+const UNIDADES = ['MG - Sete Lagoas', 'MT - Barra do Garças'];
+// Unidade específica do SQM (rótulos pedidos pela Qualidade)
+const UNIDADES_SQM = ['SETE LAGOAS', 'BARRA DO GARÇAS', 'AMBAS'];
+// Produto indicado para (formulação SQM)
+const PRODUTO_INDICADO = ['Monogástricos', 'Ruminantes', 'Ambos'];
+const CATEGORIAS = ['Sistema ICT_IT System', 'Documentação', 'Produto Final', 'Intermediate Product (Produto Intermediário)', 'Rótulos', 'Sistema de Gestão', 'Monitoramento', 'Procedimento', 'Embalagem'];
+const TIPOS_DESVIO = ['Fora de Especificação', 'Controle em Processo (Ex: umidade PH no processo)', 'Sistema de Controle (Ex: Protheus, Pipefy, Gemba, Sig...)', 'Contaminação', 'Produção/Rendimento', 'Falha/Mau Funcionamento de Equipamento', 'Falha de Calibração', 'Material Vencido', 'Limite Excedido'];
 let RESPONSAVEIS = ['André Augusto'];
 
 // Emails vinculados (para envio via mailto)
@@ -618,7 +629,7 @@ const seedData = {
       ],
     },
     {
-      id: 'D-0004', numero: 'DSM-2026-0004', fase: 'rca',
+      id: 'D-0004', numero: 'DSM-2026-0004', fase: 'concluido',
       criticidade: 1, diasAtraso: 11,
       registro: {
         titulo: 'Presença de carunchos em silos de armazenamento de ionóforos',
@@ -825,7 +836,7 @@ const seedData = {
         responsavel: 'Izabela Koh', dataAvaliacao: '2026-08-05',
       },
       acao: {
-        criarAcao: 'sim', descricaoAcao: 'Solicitar auditoria remota anual.',
+        criarAcao: 'sim', numeroAcaoIRIS: 'IRIS-000123',
         areaResponsavel: 'Qualidade',
       },
       aprovacoes: {
@@ -1122,6 +1133,26 @@ function tratarConflito(op, r) {
 
 const CHAVES_TIPO = { desvio: 'desvios', acao: 'acoes', nc: 'nc', sqm: 'sqm', lixeira: 'lixeira' };
 
+// Migração leve de fases antigas para o layout novo (não perde cards).
+// Roda no carregamento; se o card for editado, a nova fase é salva no servidor.
+const FASES_FINAIS_SQM = ['aprovado', 'reprovado'];
+function normalizarFaseCard(tipoCurto, card) {
+  if (!card) return card;
+  if (tipoCurto === 'desvio' && card.fase === 'rca') card.fase = 'concluido';
+  if (tipoCurto === 'sqm' && card.fase === 'concluido') {
+    const a = card.aprovacoes || {};
+    const reprovou = ['qualidade','she','operacoes'].some(g => a[g]?.status === 'reprovado');
+    card.fase = reprovou ? 'reprovado' : 'aprovado';
+  }
+  return card;
+}
+function normalizarDados(dados) {
+  if (!dados) return dados;
+  (dados.desvios || []).forEach(c => normalizarFaseCard('desvio', c));
+  (dados.sqm || []).forEach(c => normalizarFaseCard('sqm', c));
+  return dados;
+}
+
 async function carregarDados() {
   if (!apiConfigurada()) {
     marcarStatusSync('local');
@@ -1148,6 +1179,7 @@ async function carregarDados() {
     }
 
     dados.lixeira = dados.lixeira || [];
+    normalizarDados(dados);
     aplicarConfigSalva(dados);
     salvarCacheLocal(dados);
     marcarStatusSync('ok');
@@ -1174,6 +1206,7 @@ function carregarCacheLocal() {
     if (bruto) {
       const d = JSON.parse(bruto);
       d.lixeira = d.lixeira || [];
+      normalizarDados(d);
       aplicarConfigSalva(d);
       return d;
     }
@@ -1208,6 +1241,7 @@ async function buscarNovidades() {
     Object.keys(CHAVES_TIPO).forEach(tipoCurto => {
       const chave = CHAVES_TIPO[tipoCurto];
       (r.dados[chave] || []).forEach(cardNovo => {
+        normalizarFaseCard(tipoCurto, cardNovo);
         state.data[chave] = state.data[chave] || [];
         const i = state.data[chave].findIndex(c => c.id === cardNovo.id);
         if (i > -1) {
@@ -1786,7 +1820,7 @@ function updateCounts() {
   const desviosAtivos = state.data.desvios.filter(d => d.fase !== 'concluido').length;
   const acoesAtivas = state.data.acoes.filter(a => a.fase !== 'concluido').length;
   const ncAtivas = (state.data.nc || []).filter(n => n.fase !== 'concluido').length;
-  const sqmAtivas = (state.data.sqm || []).filter(s => s.fase !== 'concluido').length;
+  const sqmAtivas = (state.data.sqm || []).filter(s => !FASES_FINAIS_SQM.includes(s.fase)).length;
   document.getElementById('desviosCount').textContent = desviosAtivos;
   document.getElementById('acoesCount').textContent = acoesAtivas;
   const ncEl = document.getElementById('ncCount');
@@ -2742,8 +2776,7 @@ function renderDesvioForm(card, isNew) {
       ${FASES_DESVIO.map((f, i) => {
         const isCurrent = f.id === faseAtual;
         const isPast = i < faseIdx;
-        const isSkipped = (f.id === 'avalFormulacao' && !isNew && card.avalQualidade.precisaFormulacao === 'nao')
-                      || (f.id === 'rca' && !isNew && card.avalQualidade.precisaRCA === 'nao');
+        const isSkipped = (f.id === 'avalFormulacao' && !isNew && card.avalQualidade.precisaFormulacao === 'nao');
         return `
           <div class="flex-1 flex items-center gap-1">
             <div class="flex-1 h-1.5 rounded-full" style="background: ${isPast || isCurrent ? f.color : (isSkipped ? '#D1D5DB' : '#E5E7EB')}; ${isSkipped ? 'opacity: 0.4;' : ''}"></div>
@@ -2770,12 +2803,6 @@ function renderDesvioForm(card, isNew) {
           <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">FASE ATUAL</label>
           <select id="f_fase" class="input" style="min-width: 180px;">
             ${FASES_DESVIO.map(f => `<option value="${f.id}" ${card.fase === f.id ? 'selected' : ''}>${f.label}</option>`).join('')}
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CRITICIDADE</label>
-          <select id="f_criticidade" class="input" style="min-width: 180px;">
-            ${CRITICIDADES.map(c => `<option value="${c.id}" ${card.criticidade === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -2826,6 +2853,55 @@ function renderDesvioForm(card, isNew) {
           </select>
         </div>
         <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">ALGUMA FALHA/QUEBRA DE EQUIPAMENTO?</label>
+          <select id="f_reg_g_falhaEquip" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.registro.gFalhaEquip === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.registro.gFalhaEquip === 'nao' ? 'selected' : ''}>Não</option>
+            <option value="naoSei" ${card.registro.gFalhaEquip === 'naoSei' ? 'selected' : ''}>Não sei</option>
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">HOUVE RECLAMAÇÃO DE CLIENTE, CONTAMINAÇÃO DE MATERIAL, PRODUTO NÃO CONFORME EM RELAÇÃO AOS NÍVEIS DE GARANTIA OU OUTRO DESVIO QUE IMPACTE NA QUALIDADE?</label>
+          <select id="f_reg_g_reclamacao" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.registro.gReclamacao === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.registro.gReclamacao === 'nao' ? 'selected' : ''}>Não</option>
+            <option value="naoSei" ${card.registro.gReclamacao === 'naoSei' ? 'selected' : ''}>Não sei</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">HOUVE VAZAMENTO DE PRODUTO (EXCETO ÓLEO LUBRIFICANTE)?</label>
+          <select id="f_reg_g_vazamento" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.registro.gVazamento === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.registro.gVazamento === 'nao' ? 'selected' : ''}>Não</option>
+            <option value="naoSei" ${card.registro.gVazamento === 'naoSei' ? 'selected' : ''}>Não sei</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">HOUVE INCIDENTE DE SEGURANÇA, SAÚDE OU MEIO AMBIENTE?</label>
+          <select id="f_reg_g_incidenteSHE" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.registro.gIncidenteSHE === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.registro.gIncidenteSHE === 'nao' ? 'selected' : ''}>Não</option>
+            <option value="naoSei" ${card.registro.gIncidenteSHE === 'naoSei' ? 'selected' : ''}>Não sei</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">DESVIO RELACIONADO COM PRODUTO ACABADO?</label>
+          <select id="f_reg_g_produtoAcabado" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.registro.gProdutoAcabado === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.registro.gProdutoAcabado === 'nao' ? 'selected' : ''}>Não</option>
+            <option value="na" ${card.registro.gProdutoAcabado === 'na' ? 'selected' : ''}>N.A</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">DATA E HORA DO PREENCHIMENTO</label>
+          <input id="f_reg_dataPreenchimento" type="datetime-local" class="input" value="${card.registro.dataPreenchimento || ''}">
+        </div>
+        <div>
           <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">RESPONSÁVEL PELO PREENCHIMENTO</label>
           <select id="f_reg_responsavelPreenchimento" class="input">
             ${RESPONSAVEIS.map(r => `<option value="${r}" ${card.registro.responsavelPreenchimento === r ? 'selected' : ''}>${r}</option>`).join('')}
@@ -2853,6 +2929,13 @@ function renderDesvioForm(card, isNew) {
         ${faseIdx > 1 ? '<i data-lucide="check-circle-2" class="w-4 h-4 ml-auto" style="color: #059669;"></i>' : ''}
       </summary>
       <div class="p-4 grid grid-cols-2 gap-3">
+        <div class="col-span-2 p-3 rounded-md" style="background: var(--surface-2); border: 1px solid var(--border);">
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CRITICIDADE (definida pela Qualidade)</label>
+          <select id="f_criticidade" class="input">
+            <option value="">— Selecionar —</option>
+            ${CRITICIDADES.map(c => `<option value="${c.id}" ${card.criticidade === c.id ? 'selected' : ''}>${c.label}</option>`).join('')}
+          </select>
+        </div>
         <div class="col-span-2">
           <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">FORMULÁRIO PREENCHIDO CORRETAMENTE?</label>
           <select id="f_aq_formularioCorreto" class="input">
@@ -3009,6 +3092,10 @@ function renderDesvioForm(card, isNew) {
               <input type="radio" name="precisaComercial" value="nao" ${card.avalFormulacao.precisaComercial === 'nao' ? 'checked' : ''}>
               <span class="text-sm">Não</span>
             </label>
+            <button type="button" onclick="enviarEmailComercialLiberacao()" class="btn btn-secondary text-xs ml-auto whitespace-nowrap">
+              <i data-lucide="mail" class="w-3.5 h-3.5"></i>
+              E-mail ao Comercial (liberação do lote)
+            </button>
           </div>
         </div>
         <div class="col-span-2">
@@ -3026,34 +3113,30 @@ function renderDesvioForm(card, isNew) {
       </div>
     </details>
 
-    <!-- ============ ETAPA 4: RCA (condicional) ============ -->
-    <details ${faseAtual === 'rca' ? 'open' : ''} class="border rounded-lg ${!precisaRCA && !isNew ? 'opacity-50' : ''}" style="border-color: var(--border);">
-      <summary class="cursor-pointer p-3 font-semibold flex items-center gap-2" style="background: ${faseIdx >= 3 ? '#CCFBF1' : ''};">
+    <!-- ============ ETAPA 4: AÇÕES (IRIS) ============ -->
+    <details class="border rounded-lg" style="border-color: var(--border);">
+      <summary class="cursor-pointer p-3 font-semibold flex items-center gap-2" style="background: ${faseIdx >= 2 ? '#CCFBF1' : ''};">
         <span class="status-dot" style="background: #0D9488;"></span>
-        4. RCA — Análise de Causa Raiz ${!precisaRCA && !isNew ? '<span class="text-xs font-normal" style="color: var(--text-3);">(não aplicável)</span>' : ''}
-        ${faseIdx > 3 ? '<i data-lucide="check-circle-2" class="w-4 h-4 ml-auto" style="color: #059669;"></i>' : ''}
+        4. Ações (IRIS)
       </summary>
       <div class="p-4 grid grid-cols-2 gap-3">
-        <div class="col-span-2">
-          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CAUSA RAIZ</label>
-          <textarea id="f_rca_causaRaiz" class="input" rows="2" placeholder="Descrição da causa raiz identificada">${escapeHtml(card.rcaData.causaRaiz || '')}</textarea>
+        <div class="col-span-2 p-3 rounded-md" style="background: var(--info-soft); color: var(--info);">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="info" class="w-4 h-4"></i>
+            <span class="text-sm font-semibold">A ação deverá ser registrada no sistema IRIS para gerenciamento da mesma.</span>
+          </div>
+          <div class="text-xs">
+            Havendo mais de uma ação para este desvio, abra uma <strong>Track List</strong> no IRIS usando como título o
+            <strong>lote do produto</strong>.
+          </div>
         </div>
         <div class="col-span-2">
-          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">AÇÕES CORRETIVAS</label>
-          <textarea id="f_rca_acoesCorretivas" class="input" rows="2" placeholder="Ações para eliminar a causa raiz">${escapeHtml(card.rcaData.acoesCorretivas || '')}</textarea>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">Nº DA(S) AÇÃO(ÕES) NO IRIS</label>
+          <input id="f_rca_numeroAcaoIRIS" class="input" value="${escapeHtml(card.rcaData.numeroAcaoIRIS || '')}" placeholder="Nº da ação aberta no IRIS (ou da Track List)">
         </div>
-        <div>
-          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">RESPONSÁVEL DA RCA</label>
-          <select id="f_rca_responsavel" class="input">
-            <option value="">— Selecionar —</option>
-            ${RESPONSAVEIS.map(r => `<option value="${r}" ${card.rcaData.responsavel === r ? 'selected' : ''}>${r}</option>`).join('')}
-          </select>
+        <div class="col-span-2 text-xs" style="color: var(--text-3);">
+          Ferramenta auxiliar opcional (5 Porquês) — o registro oficial da análise fica no IRIS:
         </div>
-        <div>
-          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">DATA DE CONCLUSÃO DA RCA</label>
-          <input id="f_rca_dataConclusao" type="date" class="input" value="${card.rcaData.dataConclusao || ''}">
-        </div>
-        
         ${renderCincoPorquesSection()}
       </div>
     </details>
@@ -3130,6 +3213,13 @@ function enviarEmailConvocacaoRCA() {
     `DATA LIMITE PARA REALIZAÇÃO DA RCA: ${dataLimite}\n\nDescrição do desvio:\n${d.descricao}\n\n` +
     `Favor confirmar disponibilidade.\n\n— Sistema DSM Gestão`;
   sendEmail(emails, `[DSM Desvio ${d.numero}] Convocação para reunião de RCA`, corpo);
+}
+function enviarEmailComercialLiberacao() {
+  const d = coletarDadosDesvioAtual();
+  const corpo = `Prezada equipe Comercial,\n\nSolicitamos avaliação/liberação do lote referente ao desvio abaixo:\n\n` +
+    `Nº: ${d.numero}\nTítulo: ${d.titulo}\nUnidade: ${d.unidade}\n\nDescrição:\n${d.descricao}\n\n` +
+    `Favor retornar com a decisão sobre a liberação do lote.\n\n— Sistema DSM Gestão`;
+  sendEmail(getEmail('comercial'), `[DSM Desvio ${d.numero}] Solicitação de liberação do lote — Comercial`, corpo);
 }
 function enviarEmailFormulacaoConcluida() {
   const d = coletarDadosDesvioAtual();
@@ -3295,6 +3385,36 @@ function renderNCForm(card, isNew) {
           <input id="f_nc_notaFiscal" class="input" value="${escapeHtml(card.registro.notaFiscal || '')}" placeholder="85421">
         </div>
         <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">DATA DE FABRICAÇÃO</label>
+          <input id="f_nc_dataFabricacao" type="date" class="input" value="${card.registro.dataFabricacao || ''}">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">VALIDADE</label>
+          <input id="f_nc_validade" type="date" class="input" value="${card.registro.validade || ''}">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">QUANTIDADE RECEBIDA</label>
+          <input id="f_nc_qtdRecebida" class="input" value="${escapeHtml(card.registro.qtdRecebida || '')}" placeholder="Ex: 1000 kg / 20 sacos">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">QUANTIDADE RECLAMADA</label>
+          <input id="f_nc_qtdReclamada" class="input" value="${escapeHtml(card.registro.qtdReclamada || '')}" placeholder="Ex: 150 kg / 3 sacos">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">PROBLEMA MACRO</label>
+          <select id="f_nc_problemaMacro" class="input">
+            <option value="">— Selecionar —</option>
+            ${PROBLEMA_MACRO_NC.map(t => `<option value="${t}" ${card.registro.problemaMacro === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">NC (CLASSIFICAÇÃO DO ITEM)</label>
+          <select id="f_nc_classificacaoNC" class="input">
+            <option value="">— Selecionar —</option>
+            ${CLASSIFICACAO_NC.map(t => `<option value="${t}" ${card.registro.classificacaoNC === t ? 'selected' : ''}>${t}</option>`).join('')}
+          </select>
+        </div>
+        <div>
           <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">TIPO DE NÃO CONFORMIDADE</label>
           <select id="f_nc_tipoNC" class="input">
             <option value="">— Selecionar —</option>
@@ -3404,6 +3524,14 @@ function renderNCForm(card, isNew) {
             ${DECISOES_UNIDADE.map(d => `<option value="${d}" ${card.avaliacaoQualidade.decisaoUnidade === d ? 'selected' : ''}>${d}</option>`).join('')}
           </select>
         </div>
+        <div class="col-span-2 p-3 rounded-md" style="background: var(--surface-2); border: 1px solid var(--border);">
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">QUANTIDADE DE PARÂMETROS FORA DE ESPECIFICAÇÃO</label>
+          <div class="text-xs mb-2" style="color: var(--text-3);">Em caso de não conformidades encontradas em análise de níveis de garantia</div>
+          <select id="f_nc_qtdParametrosFE" class="input">
+            <option value="">— Selecionar —</option>
+            ${QTD_PARAMETROS_FE.map(q => `<option value="${q}" ${card.avaliacaoQualidade.qtdParametrosFE === q ? 'selected' : ''}>${q}</option>`).join('')}
+          </select>
+        </div>
         <div class="col-span-2">
           <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CAUSA RAIZ ENCONTRADA</label>
           <textarea id="f_nc_causaRaiz" class="input" rows="2" placeholder="Breve descrição da causa raiz">${escapeHtml(card.avaliacaoQualidade.causaRaiz || '')}</textarea>
@@ -3487,20 +3615,29 @@ function gerarPDFdaNC() {
         <div class="field"><div class="label">Lote</div><div class="value">${escapeHtml(r.lote || '—')}</div></div>
         <div class="field"><div class="label">Nota Fiscal</div><div class="value">${escapeHtml(r.notaFiscal || '—')}</div></div>
       </div>
+      <div class="row">
+        <div class="field"><div class="label">Data de Fabricação</div><div class="value">${r.dataFabricacao ? new Date(r.dataFabricacao).toLocaleDateString('pt-BR') : '—'}</div></div>
+        <div class="field"><div class="label">Validade</div><div class="value">${r.validade ? new Date(r.validade).toLocaleDateString('pt-BR') : '—'}</div></div>
+        <div class="field"><div class="label">Qtd. Recebida</div><div class="value">${escapeHtml(r.qtdRecebida || '—')}</div></div>
+        <div class="field"><div class="label">Qtd. Reclamada</div><div class="value">${escapeHtml(r.qtdReclamada || '—')}</div></div>
+      </div>
     </div>
     
     <div class="box">
       <h2>Descrição da Não Conformidade</h2>
-      <div class="row"><div class="field"><div class="label">Tipo de NC</div><div class="value">${escapeHtml(r.tipoNC || '—')}</div></div></div>
+      <div class="row">
+        <div class="field"><div class="label">Problema Macro</div><div class="value">${escapeHtml(r.problemaMacro || '—')}</div></div>
+        <div class="field"><div class="label">NC (Classificação)</div><div class="value">${escapeHtml(r.classificacaoNC || '—')}</div></div>
+        <div class="field"><div class="label">Tipo de NC</div><div class="value">${escapeHtml(r.tipoNC || '—')}</div></div>
+      </div>
       <div class="desc">${escapeHtml(r.descricao || '—')}</div>
     </div>
     
     <div class="box">
       <h2>📝 Para o Fornecedor Preencher e Devolver</h2>
-      <div style="margin-bottom: 12px;"><div class="label">1. O fornecedor apresenta plano de ação corretiva? (Sim / Não / Não se Aplica)</div><div class="resposta-fornecedor"></div></div>
-      <div style="margin-bottom: 12px;"><div class="label">2. Qual foi a causa raiz identificada?</div><div class="resposta-fornecedor"></div></div>
-      <div style="margin-bottom: 12px;"><div class="label">3. Descreva o plano de ação corretivo (o que, como, quando):</div><div class="resposta-fornecedor" style="min-height: 150px;"></div></div>
-      <div style="margin-bottom: 12px;"><div class="label">4. Observações adicionais:</div><div class="resposta-fornecedor"></div></div>
+      <div style="margin-bottom: 12px;"><div class="label">1. Qual foi a causa raiz identificada?</div><div class="resposta-fornecedor"></div></div>
+      <div style="margin-bottom: 12px;"><div class="label">2. Descreva o plano de ação corretivo (o que, como, quando):</div><div class="resposta-fornecedor" style="min-height: 150px;"></div></div>
+      <div style="margin-bottom: 12px;"><div class="label">3. Observações adicionais:</div><div class="resposta-fornecedor"></div></div>
       <div class="row" style="margin-top: 20px;">
         <div class="field"><div class="label">Nome do responsável (fornecedor)</div><div class="resposta-fornecedor" style="min-height: 30px;"></div></div>
         <div class="field"><div class="label">Data</div><div class="resposta-fornecedor" style="min-height: 30px;"></div></div>
@@ -3612,6 +3749,13 @@ function renderSQMForm(card, isNew) {
           <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">DATA SOLICITAÇÃO</label>
           <input id="f_sqm_dataSolicitacao" type="date" class="input" value="${card.compras.dataSolicitacao || ''}">
         </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">UNIDADE</label>
+          <select id="f_sqm_unidade" class="input">
+            <option value="">— Selecionar —</option>
+            ${UNIDADES_SQM.map(u => `<option value="${u}" ${card.compras.unidade === u ? 'selected' : ''}>${u}</option>`).join('')}
+          </select>
+        </div>
         <div class="col-span-2">
           <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">MOTIVO DA AVALIAÇÃO</label>
           <textarea id="f_sqm_motivoAvaliacao" class="input" rows="2" placeholder="Ex: Novo fornecedor, renovação anual, mudança de origem">${escapeHtml(card.compras.motivoAvaliacao || '')}</textarea>
@@ -3633,13 +3777,128 @@ function renderSQMForm(card, isNew) {
       </div>
     </details>
     
+    <!-- ETAPA 2: AÇÃO (IRIS) — antes da formulação -->
+    <details ${faseAtual === 'acaoIRIS' ? 'open' : ''} class="border rounded-lg" style="border-color: var(--border);">
+      <summary class="cursor-pointer p-3 font-semibold flex items-center gap-2" style="background: ${faseIdx >= 1 ? '#FEF3C7' : ''};">
+        <span class="status-dot" style="background: #D97706;"></span>
+        2. Ação (IRIS) ${faseIdx > 1 ? '<i data-lucide="check-circle-2" class="w-4 h-4 ml-auto" style="color: #059669;"></i>' : ''}
+      </summary>
+      <div class="p-4 grid grid-cols-2 gap-3">
+        <div class="col-span-2 p-3 rounded-md" style="background: var(--info-soft); color: var(--info);">
+          <div class="flex items-center gap-2 mb-1">
+            <i data-lucide="info" class="w-4 h-4"></i>
+            <span class="text-sm font-semibold">A ação deverá ser registrada no sistema IRIS para gerenciamento da mesma.</span>
+          </div>
+          <div class="text-xs">
+            Havendo mais de uma ação para esta homologação, abra uma <strong>Track List</strong> no IRIS com o título no formato
+            <em>Nome da MP / Cód – Fornecedor</em>.
+            ${card.compras && (card.compras.produtoMP || card.compras.fornecedor)
+              ? `<br>Sugestão de título: <strong>${escapeHtml((card.compras.produtoMP || '') + (card.compras.codigo ? ' (' + card.compras.codigo + ')' : '') + (card.compras.fornecedor ? ' - ' + card.compras.fornecedor : ''))}</strong>`
+              : `<br>Ex: <strong>BIOTINA (VITAMINA H) (MP00140040) - ADISSEO</strong>`}
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CRIAR AÇÃO PARA ESTA HOMOLOGAÇÃO?</label>
+          <select id="f_sqm_criarAcao" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.acao.criarAcao === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.acao.criarAcao === 'nao' ? 'selected' : ''}>Não</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">ÁREA RESPONSÁVEL</label>
+          <select id="f_sqm_areaResponsavel" class="input">
+            <option value="">— Selecionar —</option>
+            ${AREAS.map(a => `<option value="${a}" ${card.acao.areaResponsavel === a ? 'selected' : ''}>${a}</option>`).join('')}
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">Nº DA AÇÃO NO IRIS</label>
+          <input id="f_sqm_numeroAcaoIRIS" class="input" value="${escapeHtml(card.acao.numeroAcaoIRIS || '')}" placeholder="Nº da ação aberta no IRIS (ou da Track List)">
+        </div>
+      </div>
+    </details>
+    
     <!-- ETAPA 2: FORMULAÇÃO -->
     <details ${faseAtual === 'formulacao' ? 'open' : ''} class="border rounded-lg" style="border-color: var(--border);">
       <summary class="cursor-pointer p-3 font-semibold flex items-center gap-2" style="background: ${faseIdx >= 1 ? '#EDE9FE' : ''};">
         <span class="status-dot" style="background: #7C3AED;"></span>
-        2. Validação da Formulação (Tâmara) ${faseIdx > 1 ? '<i data-lucide="check-circle-2" class="w-4 h-4 ml-auto" style="color: #059669;"></i>' : ''}
+        3. Validação da Formulação (Tâmara) ${faseIdx > 1 ? '<i data-lucide="check-circle-2" class="w-4 h-4 ml-auto" style="color: #059669;"></i>' : ''}
       </summary>
       <div class="p-4 grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">MATÉRIA-PRIMA NOVA?</label>
+          <select id="f_sqm_mpNova" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.formulacao.mpNova === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.formulacao.mpNova === 'nao' ? 'selected' : ''}>Não</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CLASSIFICAÇÃO DO PRODUTO</label>
+          <input id="f_sqm_classificacaoProduto" class="input" value="${escapeHtml(card.formulacao.classificacaoProduto || '')}" placeholder="Digite aqui...">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">NOME DO PRODUTO NA OP</label>
+          <input id="f_sqm_nomeProdutoOP" class="input" value="${escapeHtml(card.formulacao.nomeProdutoOP || '')}" placeholder="Digite aqui...">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">NOME DO PRODUTO NO RÓTULO</label>
+          <input id="f_sqm_nomeProdutoRotulo" class="input" value="${escapeHtml(card.formulacao.nomeProdutoRotulo || '')}" placeholder="Digite aqui...">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">NÍVEIS DE GARANTIA</label>
+          <input id="f_sqm_niveisGarantia" class="input" value="${escapeHtml(card.formulacao.niveisGarantia || '')}" placeholder="Digite aqui...">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">MIN/MÁX</label>
+          <input id="f_sqm_minMax" class="input" value="${escapeHtml(card.formulacao.minMax || '')}" placeholder="Digite aqui...">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">PRODUTO INDICADO PARA</label>
+          <select id="f_sqm_produtoIndicado" class="input">
+            <option value="">— Selecionar —</option>
+            ${PRODUTO_INDICADO.map(x => `<option value="${x}" ${card.formulacao.produtoIndicado === x ? 'selected' : ''}>${x}</option>`).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">ESTOQUE MÍNIMO MG/MT</label>
+          <input id="f_sqm_estoqueMinimo" class="input" value="${escapeHtml(card.formulacao.estoqueMinimo || '')}" placeholder="Digite aqui...">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CONTÉM/É URÉIA?</label>
+          <select id="f_sqm_contemUreia" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.formulacao.contemUreia === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.formulacao.contemUreia === 'nao' ? 'selected' : ''}>Não</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CONTÉM/É IONÓFORO?</label>
+          <select id="f_sqm_contemIonoforo" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.formulacao.contemIonoforo === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.formulacao.contemIonoforo === 'nao' ? 'selected' : ''}>Não</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">MATÉRIA-PRIMA É SUBSTITUTA?</label>
+          <select id="f_sqm_mpSubstituta" class="input">
+            <option value="">— Selecionar —</option>
+            <option value="sim" ${card.formulacao.mpSubstituta === 'sim' ? 'selected' : ''}>Sim</option>
+            <option value="nao" ${card.formulacao.mpSubstituta === 'nao' ? 'selected' : ''}>Não</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">MATÉRIA-PRIMA SUBSTITUI QUAL?</label>
+          <input id="f_sqm_mpSubstituiQual" class="input" value="${escapeHtml(card.formulacao.mpSubstituiQual || '')}" placeholder="Digite aqui...">
+        </div>
+        <div class="col-span-2 p-3 rounded-md" style="background: var(--warn-soft); color: #92400E;">
+          <div class="flex items-center gap-2">
+            <i data-lucide="paperclip" class="w-4 h-4"></i>
+            <span class="text-sm"><strong>Anexar PSL:</strong> caso a MP seja considerada CMR, anexe o formulário na seção de <strong>Anexos</strong> (abaixo).</span>
+          </div>
+        </div>
         <div class="col-span-2">
           <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">ANÁLISE TÉCNICA DA FORMULAÇÃO</label>
           <textarea id="f_sqm_analiseTecnica" class="input" rows="3">${escapeHtml(card.formulacao.analiseTecnica || '')}</textarea>
@@ -3663,7 +3922,7 @@ function renderSQMForm(card, isNew) {
     <details ${faseAtual === 'avaliacaoSQM' ? 'open' : ''} class="border rounded-lg" style="border-color: var(--border);">
       <summary class="cursor-pointer p-3 font-semibold flex items-center gap-2" style="background: ${faseIdx >= 2 ? '#D1FAE5' : ''};">
         <span class="status-dot" style="background: #059669;"></span>
-        3. Avaliação SQM (Qualidade) ${faseIdx > 2 ? '<i data-lucide="check-circle-2" class="w-4 h-4 ml-auto" style="color: #059669;"></i>' : ''}
+        4. Avaliação SQM (Qualidade) ${faseIdx > 2 ? '<i data-lucide="check-circle-2" class="w-4 h-4 ml-auto" style="color: #059669;"></i>' : ''}
       </summary>
       <div class="p-4 grid grid-cols-2 gap-3">
         <div class="col-span-2">
@@ -3694,35 +3953,6 @@ function renderSQMForm(card, isNew) {
             </button>
           </div>
         ` : ''}
-      </div>
-    </details>
-    
-    <!-- ETAPA 4: AÇÃO OPCIONAL -->
-    <details class="border rounded-lg" style="border-color: var(--border);">
-      <summary class="cursor-pointer p-3 font-semibold flex items-center gap-2" style="background: var(--surface-2);">
-        <span class="status-dot" style="background: var(--warn);"></span>
-        Ação para esta homologação
-      </summary>
-      <div class="p-4 grid grid-cols-2 gap-3">
-        <div>
-          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">CRIAR AÇÃO PARA ESTA HOMOLOGAÇÃO?</label>
-          <select id="f_sqm_criarAcao" class="input">
-            <option value="">— Selecionar —</option>
-            <option value="sim" ${card.acao.criarAcao === 'sim' ? 'selected' : ''}>Sim</option>
-            <option value="nao" ${card.acao.criarAcao === 'nao' ? 'selected' : ''}>Não</option>
-          </select>
-        </div>
-        <div>
-          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">ÁREA RESPONSÁVEL</label>
-          <select id="f_sqm_areaResponsavel" class="input">
-            <option value="">— Selecionar —</option>
-            ${AREAS.map(a => `<option value="${a}" ${card.acao.areaResponsavel === a ? 'selected' : ''}>${a}</option>`).join('')}
-          </select>
-        </div>
-        <div class="col-span-2">
-          <label class="block text-xs font-semibold mb-1" style="color: var(--text-2);">DESCRIÇÃO DA AÇÃO</label>
-          <textarea id="f_sqm_descricaoAcao" class="input" rows="2">${escapeHtml(card.acao.descricaoAcao || '')}</textarea>
-        </div>
       </div>
     </details>
     
@@ -3768,10 +3998,14 @@ function renderSQMForm(card, isNew) {
             </div>
           `;
         }).join('')}
-        <div class="flex justify-end">
+        <div class="flex justify-end gap-2">
           <button type="button" onclick="enviarEmailStatusSQM()" class="btn btn-secondary text-xs">
             <i data-lucide="mail" class="w-3.5 h-3.5"></i>
             Notificar status da avaliação
+          </button>
+          <button type="button" onclick="finalizarSQM()" class="btn btn-primary text-xs">
+            <i data-lucide="check-check" class="w-3.5 h-3.5"></i>
+            Concluir homologação (Aprovado/Reprovado)
           </button>
         </div>
       </div>
@@ -3820,6 +4054,21 @@ function enviarEmailGerenciasSQM() {
     `Favor acessar o sistema para registrar aprovação.\n\n— Sistema DSM Gestão`;
   sendEmail(getEmail('gerencias'), `[DSM SQM ${c.numero || ''}] Aprovação de gerências pendente`, corpo);
 }
+function finalizarSQM() {
+  const c = state.editingCard;
+  if (!c || !c.id) return;
+  const a = c.aprovacoes || {};
+  const decididas = ['qualidade','she','operacoes'].filter(g => a[g]?.status === 'aprovado' || a[g]?.status === 'reprovado');
+  if (decididas.length < 3) {
+    if (!confirm('Nem todas as 3 gerências decidiram ainda.\n\nDeseja concluir mesmo assim com base no que está preenchido?')) return;
+  }
+  const reprovou = ['qualidade','she','operacoes'].some(g => a[g]?.status === 'reprovado');
+  const novaFase = reprovou ? 'reprovado' : 'aprovado';
+  const seletorFase = document.getElementById('f_fase');
+  if (seletorFase) seletorFase.value = novaFase;
+  showToast(reprovou ? 'Marcado como REPROVADO — clique em Salvar' : 'Marcado como APROVADO — clique em Salvar');
+}
+
 function enviarEmailStatusSQM() {
   const c = state.editingCard || {};
   const cm = c.compras || {};
@@ -3981,6 +4230,12 @@ function saveCard() {
       areaEquipamento: get('f_reg_areaEquipamento'),
       acaoImediata: get('f_reg_acaoImediata'),
       gatilhoOperacional: get('f_reg_gatilhoOperacional'),
+      gFalhaEquip: get('f_reg_g_falhaEquip'),
+      gReclamacao: get('f_reg_g_reclamacao'),
+      gVazamento: get('f_reg_g_vazamento'),
+      gIncidenteSHE: get('f_reg_g_incidenteSHE'),
+      gProdutoAcabado: get('f_reg_g_produtoAcabado'),
+      dataPreenchimento: get('f_reg_dataPreenchimento'),
       responsavelPreenchimento: get('f_reg_responsavelPreenchimento'),
     };
     const avalQualidade = {
@@ -4008,10 +4263,8 @@ function saveCard() {
       observacaoFormulacao: get('f_af_observacaoFormulacao'),
     };
     const rcaData = {
-      causaRaiz: get('f_rca_causaRaiz'),
-      acoesCorretivas: get('f_rca_acoesCorretivas'),
-      responsavel: get('f_rca_responsavel'),
-      dataConclusao: get('f_rca_dataConclusao'),
+      ...(card.rcaData || {}),
+      numeroAcaoIRIS: get('f_rca_numeroAcaoIRIS'),
     };
     card = {
       ...card,
@@ -4068,6 +4321,9 @@ function saveCard() {
       emailFornecedor: get('f_nc_emailFornecedor'), cnpj: get('f_nc_cnpj'),
       unidade: get('f_nc_unidade'), produto: get('f_nc_produto'),
       lote: get('f_nc_lote'), notaFiscal: get('f_nc_notaFiscal'),
+      dataFabricacao: get('f_nc_dataFabricacao'), validade: get('f_nc_validade'),
+      qtdRecebida: get('f_nc_qtdRecebida'), qtdReclamada: get('f_nc_qtdReclamada'),
+      problemaMacro: get('f_nc_problemaMacro'), classificacaoNC: get('f_nc_classificacaoNC'),
       tipoNC: get('f_nc_tipoNC'), dataDeteccao: get('f_nc_dataDeteccao'),
       responsavelDeteccao: get('f_nc_responsavelDeteccao'),
       descricao: get('f_nc_descricao'),
@@ -4085,6 +4341,7 @@ function saveCard() {
     const avaliacaoQualidade = {
       apresentouPlano: get('f_nc_apresentouPlano'),
       decisaoUnidade: get('f_nc_decisaoUnidade'),
+      qtdParametrosFE: get('f_nc_qtdParametrosFE'),
       causaRaiz: get('f_nc_causaRaiz'),
       observacao: get('f_nc_observacaoQualidade'),
     };
@@ -4118,11 +4375,24 @@ function saveCard() {
     const compras = {
       produtoMP: get('f_sqm_produtoMP'), codigo: get('f_sqm_codigo'),
       fornecedor: get('f_sqm_fornecedor'), origem: get('f_sqm_origem'),
+      unidade: get('f_sqm_unidade'),
       dataSolicitacao: get('f_sqm_dataSolicitacao'),
       motivoAvaliacao: get('f_sqm_motivoAvaliacao'),
       responsavelCompras: get('f_sqm_responsavelCompras'),
     };
     const formulacao = {
+      mpNova: get('f_sqm_mpNova'),
+      classificacaoProduto: get('f_sqm_classificacaoProduto'),
+      nomeProdutoOP: get('f_sqm_nomeProdutoOP'),
+      nomeProdutoRotulo: get('f_sqm_nomeProdutoRotulo'),
+      niveisGarantia: get('f_sqm_niveisGarantia'),
+      minMax: get('f_sqm_minMax'),
+      produtoIndicado: get('f_sqm_produtoIndicado'),
+      estoqueMinimo: get('f_sqm_estoqueMinimo'),
+      contemUreia: get('f_sqm_contemUreia'),
+      contemIonoforo: get('f_sqm_contemIonoforo'),
+      mpSubstituta: get('f_sqm_mpSubstituta'),
+      mpSubstituiQual: get('f_sqm_mpSubstituiQual'),
       analiseTecnica: get('f_sqm_analiseTecnica'),
       observacoes: get('f_sqm_observacoes'),
       responsavel: get('f_sqm_responsavelFormulacao'),
@@ -4137,7 +4407,7 @@ function saveCard() {
     const acao = {
       criarAcao: get('f_sqm_criarAcao'),
       areaResponsavel: get('f_sqm_areaResponsavel'),
-      descricaoAcao: get('f_sqm_descricaoAcao'),
+      numeroAcaoIRIS: get('f_sqm_numeroAcaoIRIS'),
     };
     const aprovacoes = {
       qualidade: {
